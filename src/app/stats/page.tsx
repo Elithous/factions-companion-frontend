@@ -14,6 +14,7 @@ import GameFilter from '@/components/general/gameFilter';
 import { Container, Loader, Text, Paper, Stack, Group } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 
+import Alpine from '../../../public/maps/Alpine.png';
 import Beralich from '../../../public/maps/Beralich.png';
 import Doma from '../../../public/maps/Doma.png';
 import Necropolis from '../../../public/maps/Necropolis.png';
@@ -31,6 +32,7 @@ export interface ToFromFaction {
 }
 
 const mapImageMap: { [mapName: string]: StaticImageData } = {
+  Alpine,
   Beralich,
   Doma,
   Necropolis,
