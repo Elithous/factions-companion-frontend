@@ -1,56 +1,42 @@
 "use client";
 
+import { useCallback, useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
+
+import GameSelect from '@/components/features/game/GameSelect';
+import Map from '@/components/features/map/Map';
+import StatsFilters from '@/components/features/stats/StatsFilters';
+import StatsPanel from '@/components/features/stats/StatsPanel';
+import { Card } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
+import type { MapModel } from '@/types/map';
+import type { StatsFilter } from '@/types/stats';
+
+import { StatsError, useFilteredStats, useGameOverview } from './_hooks/useGameStats';
 import './stats.scss';
 
-import MapComponent, { MapProps } from "@/components/map/map";
-import { MapConfig, MapModel, MapTilesListModel } from "@/components/map/map.model";
-import StatsComponent from '@/components/stats/stats';
-import { fetchBackend } from '@/utils/api.helper';
-import { useEffect, useState, useCallback } from 'react';
-import { StaticImageData } from 'next/image';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
-import FilterComponent, { StatsFilter } from '@/components/stats/filter/filter';
-import GameFilter from '@/components/general/gameFilter';
-import { Container, Loader, Text, Paper, Stack, Group } from '@mantine/core';
-import { IconAlertCircle } from '@tabler/icons-react';
+/**
+ * Stable reference so StatsFilters doesn't re-sync its internal state on every
+ * render while the real range is still loading.
+ */
+const EMPTY_DATE_RANGE: [number, number] = [0, 0];
 
-import Alpine from '../../../public/maps/Alpine.png';
-import Beralich from '../../../public/maps/Beralich.png';
-import Doma from '../../../public/maps/Doma.png';
-import Necropolis from '../../../public/maps/Necropolis.png';
-import Rivers from '../../../public/maps/Rivers.png';
-import Smallworld from '../../../public/maps/Smallworld.png';
-import Volbadihr from '../../../public/maps/Volbadihr.png';
-import Wetlands from '../../../public/maps/Wetlands.png';
-import Windmill from '../../../public/maps/Windmill.png';
-import Forgotten_Weald from '../../../public/maps/Forgotten_Weald.png';
+const DEFAULT_MAP_SIZE = 50;
 
-export interface ToFromFaction {
-  [fromFaction: string]: {
-    [toFaction: string]: number
-  }
-}
-
-const mapImageMap: { [mapName: string]: StaticImageData } = {
-  Alpine,
-  Beralich,
-  Doma,
-  Necropolis,
-  Rivers,
-  Smallworld,
-  Volbadihr,
-  Wetlands,
-  Windmill,
-  'Forgotten Weald': Forgotten_Weald
-}
-
-interface LoadingState {
-  data: boolean;
-}
-
-interface ErrorState {
-  message: string;
-  details?: string;
+function ErrorCard({ error }: { error: StatsError }) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <Card className="error-container border-destructive/50 bg-destructive/10 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <AlertCircle size={20} className="text-destructive" />
+          <p className="text-lg font-medium">Error</p>
+        </div>
+        <p>{error.message}</p>
+        {error.details && <p className="mt-2 text-sm text-muted-foreground">{error.details}</p>}
+      </Card>
+    </div>
+  );
 }
 
 export default function StatsPage() {
@@ -58,221 +44,81 @@ export default function StatsPage() {
   const path = usePathname();
   const queryParams = useSearchParams();
 
-  const [loading, setLoading] = useState<LoadingState>({
-    data: false
-  });
-  const [error, setError] = useState<ErrorState | null>(null);
   const [gameId, setGameId] = useState(queryParams.get('gameId') || '');
-  const [dateRanges, setDateRanges] = useState<[number, number]>();
   const [filter, setFilter] = useState<StatsFilter>({});
-  const [totalData, setTotalData] = useState<ToFromFaction>({});
-  const [filteredData, setFilteredData] = useState<ToFromFaction>({});
-  const [mapConfig, setMapConfig] = useState<MapConfig | undefined>();
-  const [mapImage, setMapImage] = useState<StaticImageData>();
-  const [mapTiles, setMapTiles] = useState<MapTilesListModel>({});
+
+  const overview = useGameOverview(gameId);
+  const filtered = useFilteredStats(gameId, filter);
+  const error = overview.error ?? filtered.error;
 
   const updateFilter = useCallback((rule: StatsFilter) => {
     setFilter(prev => ({ ...prev, ...rule }));
   }, []);
 
-  const fetchGameData = useCallback(async (gameId: string) => {
-    try {
-      const [soldiersData, timespanData, configData] = await Promise.all([
-        fetchBackend('report/soldiers/faction', { gameId }).then(resp => resp.json()),
-        fetchBackend('report/games/timespan', { gameId }).then(resp => resp.json()),
-        fetchBackend('report/games/config', { gameId }).then(resp => resp.json())
-      ]);
-
-      setTotalData(soldiersData);
-      setDateRanges([timespanData[0] * 1000, timespanData[1] * 1000]);
-
-      const mapConfig: MapConfig = configData.mapConfig;
-      if (mapConfig) {
-        setMapConfig(mapConfig);
-        const mapImage = mapImageMap[mapConfig.name];
-        if (mapImage) {
-          setMapImage(mapImage);
-        }
-      }
-    } catch (err) {
-      setError({
-        message: 'Failed to load game data',
-        details: err instanceof Error ? err.message : 'Unknown error'
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, data: false }));
-    }
-  }, []);
-
-  const fetchFilteredData = useCallback(async (gameId: string, filter: StatsFilter) => {
-    try {
-      setLoading(prev => ({ ...prev, data: true }));
-
-      const params: {
-        unitType?: string;
-        gameId?: string;
-        tileX?: string;
-        tileY?: string;
-        playerName?: string;
-        fromFaction?: string;
-        toFaction?: string;
-        dateStart?: string;
-        dateEnd?: string;
-      } = { gameId };
-
-      if (filter?.type) params.unitType = filter.type;
-      if (filter?.tile !== undefined) {
-        params.tileX = filter.tile.x.toString();
-        params.tileY = filter.tile.y.toString();
-      }
-      if (filter?.playerName) params.playerName = filter.playerName;
-      if (filter?.fromFaction) params.fromFaction = filter.fromFaction;
-      if (filter?.toFaction) params.toFaction = filter.toFaction;
-      if (filter?.dateRange) {
-        params.dateStart = (filter.dateRange[0] / 1000).toString();
-        params.dateEnd = (filter.dateRange[1] / 1000).toString();
-      }
-
-      const [soldiersData, tileData] = await Promise.all([
-        fetchBackend('report/soldiers/faction', params).then(resp => resp.json()),
-        fetchBackend('report/soldiers/tile', params).then(resp => resp.json())
-      ]);
-
-      setFilteredData(soldiersData);
-
-      const maxValue = Object.keys(tileData).reduce((prev, x) => {
-        const max: number = Object.values<number>(tileData[x]).reduce((maxY, value) => (maxY > value ? maxY : value), 0);
-        return max > prev ? max : prev;
-      }, 0);
-
-      const mapTiles: MapTilesListModel = {};
-      for (const xKey of Object.keys(tileData)) {
-        const x = parseInt(xKey);
-        if (!mapTiles[x]) mapTiles[x] = {};
-        for (const yKey of Object.keys(tileData[x])) {
-          const y = parseInt(yKey);
-          mapTiles[x][y] = {
-            weight: tileData[xKey][yKey] / maxValue
-          }
-        }
-      }
-      setMapTiles(mapTiles);
-    } catch (err) {
-      setError({
-        message: 'Failed to load filtered data',
-        details: err instanceof Error ? err.message : 'Unknown error'
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, data: false }));
-    }
-  }, []);
-
+  // Keep the selected game in the URL, and clear filters when it changes.
   useEffect(() => {
     if (!gameId) return;
-
-    // Set query param for load
-    router.replace(`${path}?gameId=${gameId}`);
-
-    // Reset state
-    setDateRanges(undefined);
     setFilter({});
-    setTotalData({});
-    setFilteredData({});
-    setMapTiles({});
-    setError(null);
-    setLoading(prev => ({ ...prev, data: true }));
-
-    fetchGameData(gameId);
-  }, [gameId, path, router, fetchGameData]);
-
-  useEffect(() => {
-    if (!gameId) return;
-    fetchFilteredData(gameId, filter);
-  }, [filter, gameId, fetchFilteredData]);
-
-  const mapModel: MapModel = {
-    dimensions: { width: mapConfig?.width || 50, height: mapConfig?.height || 50 },
-    image: mapImage,
-    tiles: mapTiles
-  };
+    router.replace(`${path}?gameId=${gameId}`);
+  }, [gameId, path, router]);
 
   const onTileClicked = useCallback((x: number, y: number) => {
-    if (filter?.tile?.x === x && filter?.tile?.y === y) {
-      updateFilter({ tile: undefined });
-    } else {
-      updateFilter({ tile: { x, y } });
-    }
-  }, [filter?.tile, updateFilter]);
+    const isSameTile = filter.tile?.x === x && filter.tile?.y === y;
+    updateFilter({ tile: isSameTile ? undefined : { x, y } });
+  }, [filter.tile, updateFilter]);
 
-  const mapComponentProps: MapProps = {
-    map: mapModel,
-    wheelParentDepth: 2,
-    mapScale: 4,
-    tile: filter?.tile,
-    coordClicked: onTileClicked
+  if (error) return <ErrorCard error={error} />;
+
+  const mapModel: MapModel = {
+    dimensions: {
+      width: overview.mapConfig?.width || DEFAULT_MAP_SIZE,
+      height: overview.mapConfig?.height || DEFAULT_MAP_SIZE,
+    },
+    image: overview.mapImage,
+    tiles: filtered.mapTiles,
   };
-
-  const statsProps = {
-    filter,
-    data: {
-      total: totalData,
-      filtered: filteredData
-    }
-  };
-
-  if (error) {
-    return (
-      <Container size="lg" py="xl">
-        <Paper p="md" withBorder color="red" className="error-container">
-          <Group gap="xs" mb="xs">
-            <IconAlertCircle size={20} />
-            <Text fw={500} size="lg">Error</Text>
-          </Group>
-          <Text>{error.message}</Text>
-          {error.details && (
-            <Text size="sm" c="dimmed" mt="xs">
-              {error.details}
-            </Text>
-          )}
-        </Paper>
-      </Container>
-    );
-  }
 
   return (
-    <Container size="xl" py="xl">
-      <Stack gap="xl">
-        <GameFilter gameId={gameId} setGameId={setGameId} />
+    <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="flex flex-col gap-8">
+        <GameSelect gameId={gameId} setGameId={setGameId} />
 
         {gameId ? (
           <div className='map-stats'>
             <div className='map-wrapper'>
-              <MapComponent {...mapComponentProps} />
+              <Map
+                map={mapModel}
+                wheelParentDepth={2}
+                mapScale={4}
+                tile={filter.tile}
+                coordClicked={onTileClicked}
+              />
             </div>
 
-            <FilterComponent
+            <StatsFilters
               gameId={gameId}
               filter={filter}
               updateFilter={updateFilter}
-              dateRange={dateRanges || [0, 0]}
+              dateRange={overview.dateRange || EMPTY_DATE_RANGE}
             />
 
-            <StatsComponent {...statsProps} />
+            <StatsPanel
+              filter={filter}
+              data={{ total: overview.totalData, filtered: filtered.filteredData }}
+            />
 
-            {loading.data && (
+            {filtered.isLoading && (
               <div className="loading-overlay">
-                <Loader size="xl" />
+                <Spinner size={48} />
               </div>
             )}
           </div>
         ) : (
-          <Paper p="xl" withBorder>
-            <Text ta="center" c="dimmed">
-              Select a game to view statistics
-            </Text>
-          </Paper>
+          <Card className="p-8">
+            <p className="text-center text-muted-foreground">Select a game to view statistics</p>
+          </Card>
         )}
-      </Stack>
-    </Container>
+      </div>
+    </div>
   );
 }

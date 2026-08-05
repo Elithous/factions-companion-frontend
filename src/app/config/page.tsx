@@ -1,190 +1,112 @@
 'use client';
 
-import GameFilter from "@/components/general/gameFilter";
-import { fetchBackend } from "@/utils/api.helper";
-import { BuildingNames, BuildingNameType } from "@/utils/game/building.model";
-import { GameConfig, getBuildingCost, getHqCost, defaultConfig } from "@/utils/game/game.helper";
-import { Flex, NumberInput, Select, Table, TableData } from "@mantine/core";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 
-const baseCostMulti = 1.5;
+import GameSelect from "@/components/features/game/GameSelect";
+import { Combobox } from "@/components/ui/combobox";
+import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
+import { SimpleTable, SimpleTableData } from "@/components/ui/simple-table";
+import { getGameConfig } from "@/lib/api/reports";
+import {
+  ApiGameConfig,
+  BASE_COST_MULTI,
+  BuildingNameType,
+  BuildingOptions,
+  configFromApi,
+  getBuildingCost,
+  getHqCost,
+} from "@/lib/game";
 
-interface ApiGameConfig {
-  misc: {
-    parameters: {
-      building_iron_cost_multiplier: number,
-      building_wood_cost_multiplier: number,
-      building_worker_cost_multiplier: number,
-      hq_iron_cost_multiplier: number,
-      hq_wood_cost_multiplier: number,
-      hq_worker_cost_multiplier: number
-    },
-  }
+const COST_TABLE_HEAD = ['Level', 'Wood', 'Iron', 'Worker'];
+
+/** Effective per-level cost multipliers, as reported by the backend. */
+function buildParamTable(apiConfig: ApiGameConfig | undefined): SimpleTableData {
+  const params = apiConfig?.misc?.parameters;
+  const scale = (multiplier: number | undefined) =>
+    multiplier === undefined ? BASE_COST_MULTI : (multiplier * BASE_COST_MULTI).toFixed(4);
+
+  return {
+    head: ['Type', 'Wood', 'Iron', 'Worker'],
+    body: [
+      ['HQ', scale(params?.hq_wood_cost_multiplier), scale(params?.hq_iron_cost_multiplier), scale(params?.hq_worker_cost_multiplier)],
+      ['Building', scale(params?.building_wood_cost_multiplier), scale(params?.building_iron_cost_multiplier), scale(params?.building_worker_cost_multiplier)],
+    ],
+  };
 }
 
+/** Reference tables for HQ and per-building level costs in a given game. */
 export default function ConfigPage() {
   const queryParams = useSearchParams();
 
   const [gameId, setGameId] = useState(queryParams.get('gameId') || '');
   const [apiConfig, setApiConfig] = useState<ApiGameConfig>();
-  const [type, setType] = useState<BuildingNameType>();
+  const [type, setType] = useState<BuildingNameType | null>(null);
   const [maxLevel, setMaxLevel] = useState(15);
 
-  const [paramTable, setParamTable] = useState<TableData>();
-  const [costTable, setCostTable] = useState<TableData>();
-  const [hqCostTable, setHqCostTable] = useState<TableData>();
-
   useEffect(() => {
-    if (gameId) {
-      setApiConfig(undefined);
+    if (!gameId) return;
 
-      fetchBackend('report/games/config', { gameId })
-        .then((resp) => resp.json())
-        .then((data) => {
-          setApiConfig(data);
-        });
-    }
+    setApiConfig(undefined);
+    getGameConfig(gameId)
+      .then(setApiConfig)
+      .catch(error => console.error('Error loading game config:', error));
   }, [gameId]);
 
-  useEffect(() => {
-    const paramsTableBase: TableData = {
-      caption: 'Per level resource multipliers',
-      head: ['Type', 'Wood', 'Iron', 'Worker'],
-      body: [
-        [
-          'HQ',
-          baseCostMulti,
-          baseCostMulti,
-          baseCostMulti
-        ],
-        [
-          'Building',
-          baseCostMulti,
-          baseCostMulti,
-          baseCostMulti
-        ]
-      ]
-    };
+  const gameConfig = useMemo(() => configFromApi(apiConfig), [apiConfig]);
+  const paramTable = useMemo(() => buildParamTable(apiConfig), [apiConfig]);
+  const levels = useMemo(
+    () => Array.from({ length: maxLevel }, (_, index) => index + 1),
+    [maxLevel],
+  );
 
-    if (apiConfig?.misc?.parameters) {
-      const params = apiConfig.misc.parameters;
-
-      paramsTableBase.body = [
-        [
-          'HQ',
-          (params.hq_wood_cost_multiplier * baseCostMulti).toFixed(4),
-          (params.hq_iron_cost_multiplier * baseCostMulti).toFixed(4),
-          (params.hq_worker_cost_multiplier * baseCostMulti).toFixed(4)
-        ],
-        [
-          'Building',
-          (params.building_wood_cost_multiplier * baseCostMulti).toFixed(4),
-          (params.building_iron_cost_multiplier * baseCostMulti).toFixed(4),
-          (params.building_worker_cost_multiplier * baseCostMulti).toFixed(4)
-        ]
-      ];
-    }
-
-    setParamTable(paramsTableBase);
-  }, [apiConfig]);
-
-  useEffect(() => {
-    const costsTableBase: TableData = {
-      head: ['Level', 'Wood', 'Iron', 'Worker'],
-      body: []
-    };
-
-    const hqCostsTableBase: TableData = {
-      head: ['Level', 'Wood', 'Iron', 'Worker'],
-      body: []
-    };
-
-    const params = apiConfig?.misc?.parameters;
-    const gameConfig: GameConfig = {
-      cost_multi: {
-        building: {
-          wood: params?.building_wood_cost_multiplier || 1,
-          iron: params?.building_iron_cost_multiplier || 1,
-          worker: params?.building_worker_cost_multiplier || 1
-        },
-        hq: {
-          wood: params?.hq_wood_cost_multiplier || 1,
-          iron: params?.hq_iron_cost_multiplier || 1,
-          worker: params?.hq_worker_cost_multiplier || 1
-        }
-      },
-      prod_multi: defaultConfig.prod_multi,
-      storage_multi: defaultConfig.prod_multi,
-      world_multi: defaultConfig.world_multi,
-      useCostChange: false,
-      costChange: 0
-    };
-
-    if (type) {
-      for (let level = 1; level <= maxLevel; level++) {
-        const cost = getBuildingCost(type, level, gameConfig);
-
-        costsTableBase.body!.push([
-          level,
-          cost.wood,
-          cost.iron,
-          cost.worker
-        ]);
-      }
-    }
-    setCostTable(costsTableBase);
-
-    for (let level = 1; level <= maxLevel; level++) {
+  const hqCostTable: SimpleTableData = useMemo(() => ({
+    head: COST_TABLE_HEAD,
+    body: levels.map(level => {
       const cost = getHqCost(level, gameConfig);
+      return [level, cost.wood, cost.iron, cost.worker];
+    }),
+  }), [levels, gameConfig]);
 
-      hqCostsTableBase.body!.push([
-        level,
-        cost.wood,
-        cost.iron,
-        cost.worker
-      ]);
-    }
+  const costTable: SimpleTableData = useMemo(() => ({
+    head: COST_TABLE_HEAD,
+    body: type
+      ? levels.map(level => {
+          const cost = getBuildingCost(type, level, gameConfig);
+          return [level, cost.wood, cost.iron, cost.worker];
+        })
+      : [],
+  }), [levels, type, gameConfig]);
 
-    setHqCostTable(hqCostsTableBase);
-  }, [apiConfig, type, maxLevel]);
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <GameSelect gameId={gameId} setGameId={setGameId} />
 
-  return <div>
-    <GameFilter gameId={gameId} setGameId={setGameId} />
-    <Flex>
-      <Table
-        data={paramTable}
-        style={{ width: '50%', height: 'fit-content' }} />
-      <div
-        className="costs"
-        style={{ width: '100%' }}>
-        <Flex
-          gap='xl'>
-          <p style={{ textAlign: 'center', alignContent: 'end', width: '230px'}}>HQ</p>
-          <NumberInput
-            style={{ width: '70px' }}
-            label='Count'
-            value={maxLevel}
-            onChange={v => setMaxLevel(+v)}
-            min={5} />
-          <Select
-            style={{ width: 'fit-content' }}
-            label='Building'
-            value={type}
-            onChange={v => setType(v as BuildingNameType)}
-            data={BuildingNames}
-            comboboxProps={{ styles: { options: { color: 'black' } } }} />
-        </Flex>
+      <div className="mt-4 flex flex-wrap gap-8">
+        <SimpleTable data={paramTable} className="w-full max-w-md" />
 
-        <Flex gap='xl'>
-          <Table withTableBorder withColumnBorders
-            data={hqCostTable}
-            style={{ textAlign: 'right', width: 'fit-content' }} />
-          <Table withTableBorder withColumnBorders
-            data={costTable}
-            style={{ textAlign: 'right', width: 'fit-content' }} />
-        </Flex>
+        <div className="costs w-full">
+          <div className="flex flex-wrap items-end gap-8">
+            <p className="w-[230px] text-center">HQ</p>
+            <NumberInput className="w-[70px]" label='Count' value={maxLevel} onChange={setMaxLevel} min={5} />
+            <div className="flex flex-col gap-1">
+              <Label>Building</Label>
+              <Combobox
+                value={type}
+                onChange={v => setType(v as BuildingNameType | null)}
+                options={BuildingOptions}
+                triggerClassName="w-fit min-w-[180px]"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-8">
+            <SimpleTable data={hqCostTable} className="w-fit text-right" />
+            <SimpleTable data={costTable} className="w-fit text-right" />
+          </div>
+        </div>
       </div>
-    </Flex>
-  </div>
+    </div>
+  );
 }

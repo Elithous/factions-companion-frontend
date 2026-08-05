@@ -1,78 +1,31 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
-import { Container, Stack, Paper, Text, Group, Select, Tabs, Tooltip, ActionIcon } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
-import GameFilter from '@/components/general/gameFilter';
-import { fetchBackend } from '@/utils/api.helper';
-import './playerStats.scss';
-import BuildingGroupCard from './_components/BuildingGroupCard';
-import VillageCard from './_components/VillageCard';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Info } from 'lucide-react';
+
+import GameSelect from '@/components/features/game/GameSelect';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Combobox, ComboboxOption } from '@/components/ui/combobox';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SimpleTooltip } from '@/components/ui/tooltip';
+import { getActivePlayerOptions, getPlayerStats } from '@/lib/api/reports';
+import type { PlayerStats } from '@/types/player';
+
 import BuildTimeline from './_components/BuildTimeline';
+import BuildingGroupCard from './_components/BuildingGroupCard';
+import PlayerGameStats from './_components/PlayerGameStats';
+import PlayerHeatmap from './_components/PlayerHeatmap';
+import ProjectTree from './_components/ProjectTree';
+import VillageCard from './_components/VillageCard';
+import { usePlayerGameStats } from './_hooks/usePlayerGameStats';
+import { useVillageTimeline } from './_hooks/useVillageTimeline';
+import './playerStats.scss';
 
-interface PlayerStats {
-  playerName: string;
-  buildActivities: {
-    type: 'building_built' | 'building_upgraded' | 'building_destroyed' | 'hq_upgraded';
-    name: string;
-    level: number;
-    timestamp: number;
-  }[];
-  personalActivities: {
-    type: 'talent_picked' | 'spec_picked' | 'personal_project_picked';
-    name: string;
-    category: string;
-    tier: number;
-    timestamp: number;
-  }[];
-}
-
-interface GameStats {
-  gameMinute: number;
-  resourcesSpent: {
-    wood: number;
-    iron: number;
-    workers: number;
-  };
-}
-
-export interface VillageStats {
-  level: number;
-  totalCount: number;
-  buildingCount: number;
-  specialSlots: string;
-  resourcesSpent: {
-    wood: number;
-    iron: number;
-    workers: number;
-  };
-}
-
-const DEFAULT_VILLAGE: VillageStats = {
-  level: 4,
-  totalCount: 4,
-  buildingCount: 0,
-  specialSlots: "0/0",
-  resourcesSpent: {
-    wood: 0,
-    iron: 0,
-    workers: 0
-  }
-}
-
-export interface BuildingGroup {
-  name: string;
-  imageUrl?: string;
-  totalCount: number;
-  production?: string;
-  levelBreakdown: Array<{ level: number; count: number }>;
-  resourcesSpent: {
-    wood: number;
-    iron: number;
-    workers: number;
-  };
-}
+const HIDE_BUILD_MESSAGE =
+  "If you would like your build to be hidden on this screen, message BurnedAether on Discord and I'll hide it.";
 
 export default function PlayerStatsPage() {
   const router = useRouter();
@@ -80,84 +33,56 @@ export default function PlayerStatsPage() {
   const queryParams = useSearchParams();
 
   const [gameId, setGameId] = useState(queryParams.get('gameId') || '');
-  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [playerName, setPlayerName] = useState<string | null>(queryParams.get('playerName') || null);
-  const [playerList, setPlayerList] = useState<{ value: string; label: string }[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>('village');
-  const [gameStats, setGameStats] = useState<GameStats>({
-    gameMinute: 0,
-    resourcesSpent: {
-      wood: 0,
-      iron: 0,
-      workers: 0
-    }
-  });
-  const [currentTimelineStep, setCurrentTimelineStep] = useState<number>(0);
+  const [playerList, setPlayerList] = useState<ComboboxOption[]>([]);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  // Top-level tabs: Overview (career totals, TBD) / Game Log (current functionality).
+  // Defaulting to "gamelog" since that's the only tab with real data for now —
+  // flip to "overview" once that tab has content worth landing on.
+  const [activeTab, setActiveTab] = useState('gamelog');
+  const [activeSubTab, setActiveSubTab] = useState('village');
+  const [timelineStep, setTimelineStep] = useState(0);
 
-  const [villageStats, setVillageStats] = useState<VillageStats>(DEFAULT_VILLAGE);
-  const [buildingGroups, setBuildingGroups] = useState<BuildingGroup[]>([]);
+  const showTimeline = activeTab === 'gamelog' && activeSubTab === 'village';
 
-  // Fetch player list when gameId changes
+  const { villageStats, buildingGroups } = useVillageTimeline(playerStats, timelineStep);
+  const { filter: playerFilter, overview: gameOverview, filtered: filteredGameStats } =
+    usePlayerGameStats(gameId, playerName);
+
   useEffect(() => {
-    const fetchPlayers = async () => {
-      if (!gameId) {
-        setPlayerList([]);
-        return;
-      }
-      try {
-        const players = await fetchBackend('report/player/active', { gameId }).then(resp => resp.json());
-        const playerOptions = players
-          .map((p: { player_name: string }) => ({
-            value: p.player_name,
-            label: p.player_name
-          }))
-          .sort((a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label));
-        setPlayerList(playerOptions);
-      } catch (error) {
+    if (!gameId) {
+      setPlayerList([]);
+      return;
+    }
+
+    getActivePlayerOptions(gameId)
+      .then(setPlayerList)
+      .catch(error => {
         console.error('Error fetching players:', error);
         setPlayerList([]);
-      }
-    };
-
-    fetchPlayers();
+      });
   }, [gameId]);
 
-  const fetchPlayerStats = async (name: string) => {
-    if (!name) return;
-    try {
-      const playerStats = await fetchBackend(`report/player/stats/${name}`, { gameId }).then(resp => resp.json());
-      if (playerStats.error) {
-        throw playerStats.error;
-      }
-      setPlayerStats(playerStats);
-    } catch (error) {
-      setPlayerStats(null);
-      console.error('Error fetching player stats:', error);
-    }
-  };
-
   useEffect(() => {
-    if (playerName) {
-      fetchPlayerStats(playerName);
-    } else {
+    if (!playerName) {
       setPlayerStats(null);
+      return;
     }
+
+    getPlayerStats(gameId, playerName)
+      .then(setPlayerStats)
+      .catch(error => {
+        setPlayerStats(null);
+        console.error('Error fetching player stats:', error);
+      });
+    // gameId is intentionally omitted: changing it clears playerName first.
   }, [playerName]);
 
+  // Jump to the end of the build history whenever a new player loads.
   useEffect(() => {
-    handleTimelineStepChange((playerStats?.buildActivities.length || 1) - 1);
-
-    setGameStats({
-      gameMinute: 0,
-      resourcesSpent: {
-        wood: 0,
-        iron: 0,
-        workers: 0
-      }
-    });
+    setTimelineStep((playerStats?.buildActivities.length || 1) - 1);
   }, [playerStats]);
 
-  // Update URL params when gameId or playerName changes
   useEffect(() => {
     const params = new URLSearchParams();
     if (gameId) params.set('gameId', gameId);
@@ -165,182 +90,118 @@ export default function PlayerStatsPage() {
     router.replace(`${path}?${params.toString()}`);
   }, [gameId, playerName, path, router]);
 
-  const handleTimelineStepChange = useCallback((step: number) => {
-    if (!playerStats) {
-      setVillageStats(DEFAULT_VILLAGE);
-      setBuildingGroups([]);
-      return;
-    }
-    setCurrentTimelineStep(step);
-
-    const activities = playerStats.buildActivities.slice(0, step + 1);
-
-    const buildings: { [name: string]: number[] } = {}
-    let hqLevel = 4;
-    let buildingCount = 0;
-    for (const activity of activities) {
-      if (activity.name && !buildings[activity.name]) {
-        buildings[activity.name] = [];
-      }
-      const index = activity.name ? buildings[activity.name].findIndex(value => value === activity.level - 1) : -1;
-
-      switch (activity.type) {
-        case 'building_built':
-          buildings[activity.name].push(1);
-          buildingCount++;
-          break;
-        case 'building_upgraded':
-          if (index === -1) break;
-          buildings[activity.name][index]++;
-          break;
-        case 'building_destroyed':
-          buildings[activity.name].splice(index, 1);
-          buildingCount--;
-          break;
-        case 'hq_upgraded':
-          hqLevel = activity.level;
-          break;
-      }
-    }
-
-    setVillageStats({
-      level: hqLevel,
-      buildingCount,
-      totalCount: hqLevel,
-      specialSlots: '0/0',
-      resourcesSpent: {
-        iron: 0,
-        wood: 0,
-        workers: 0
-      }
-    });
-
-    const buildingStats: BuildingGroup[] = [];
-    for (const buildingName of Object.keys(buildings)) {
-      const levels = buildings[buildingName];
-      if (levels.length === 0) continue;
-      const levelCounts = levels.reduce((counts, level) => {
-        counts[level] = (counts[level] || 0) + 1;
-        return counts;
-      }, {} as Record<number, number>);
-
-      buildingStats.push({
-        name: buildingName,
-        totalCount: levels.length,
-        levelBreakdown: Object.keys(levelCounts).map(Number).map((level) => ({ level, count: levelCounts[level] })),
-        resourcesSpent: {
-          wood: 0,
-          iron: 0,
-          workers: 0
-        }
-      });
-    }
-    setBuildingGroups(buildingStats);
-  }, [playerStats]);
-
   return (
     <>
-      <Container size="xl" py="xl" style={{ marginBottom: activeTab === 'village' ? '60px' : undefined }}>
-        <Stack gap="md" className="player-activities-stack">
-          {/* Title */}
-          <Group justify="space-between" align="flex-start">
-            <Text size="xl" fw={700}>Player Activities</Text>
-            <Tooltip label="If you would like your build to be hidden on this screen, message BurnedAether on Discord and I'll hide it.">
-              <ActionIcon variant="subtle" color="gray" size="lg">
-                <IconInfoCircle size={20} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+      <div
+        className="mx-auto max-w-7xl px-4 py-8"
+        style={{ marginBottom: showTimeline ? '60px' : undefined }}
+      >
+        <div className="player-activities-stack flex flex-col gap-4">
+          <div className="flex items-start justify-between">
+            <p className="text-xl font-bold">Player Activities</p>
+            <SimpleTooltip label={HIDE_BUILD_MESSAGE}>
+              <Button variant="ghost" size="icon" className="text-muted-foreground">
+                <Info size={20} />
+              </Button>
+            </SimpleTooltip>
+          </div>
 
-          {/* Game and Player Selectors */}
-          <Paper p="md" withBorder className="selectors-section">
-            <Group gap="md" align="flex-end" wrap="wrap">
-              <div style={{ flex: '1 1 auto', minWidth: '200px', maxWidth: '300px' }}>
-                <GameFilter gameId={gameId} setGameId={setGameId} />
+          <Card className="selectors-section p-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="min-w-[200px] max-w-[300px] flex-auto">
+                <GameSelect gameId={gameId} setGameId={setGameId} />
               </div>
-              <div style={{ flex: '1 1 auto', minWidth: '200px', maxWidth: '300px' }}>
-                <Select
-                  label="Player Name"
+              <div className="flex min-w-[200px] max-w-[300px] flex-auto flex-col gap-1">
+                <Label>Player Name</Label>
+                <Combobox
                   value={playerName}
                   onChange={setPlayerName}
-                  data={playerList}
+                  options={playerList}
                   placeholder="Select player..."
-                  searchable
-                  clearable
+                  searchPlaceholder="Search players..."
                   disabled={!gameId}
                 />
               </div>
-            </Group>
-          </Paper>
+            </div>
+          </Card>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onChange={setActiveTab}>
-            <Tabs.List>
-              <Tabs.Tab value="village">Village</Tabs.Tab>
-              <Tabs.Tab value="project-tree">Project Tree</Tabs.Tab>
-            </Tabs.List>
+          {/* Top-level tabs, per the player-stats-page.html redesign template.
+              Game Log's sub-tabs are wired to existing report endpoints,
+              scoped to the selected player. Overview (career totals across
+              all games) has no existing endpoint to build on yet. */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="gamelog">Game Log</TabsTrigger>
+            </TabsList>
 
-            {/* Village Tab Content */}
-            <Tabs.Panel value="village" pt="md">
-              <Stack gap="md">
-                {/* Game Stats Section */}
-                <Paper p="md" withBorder className="game-stats-section">
-                  <Group gap="xl">
-                    <div>
-                      <Text size="sm" c="dimmed" mb={4}>Game Minute (to be calculated)</Text>
-                      <Text size="lg" fw={600}>{gameStats.gameMinute}</Text>
+            <TabsContent value="overview">
+              <Card className="p-8">
+                <p className="text-center text-muted-foreground">Overview — coming soon...</p>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="gamelog">
+              <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
+                <TabsList>
+                  <TabsTrigger value="village">Village</TabsTrigger>
+                  <TabsTrigger value="project-tree">Project Tree</TabsTrigger>
+                  <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
+                  <TabsTrigger value="game-stats">Game Stats</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="village">
+                  <div className="flex flex-col gap-4">
+                    <VillageCard villageStats={villageStats} />
+
+                    <div className="flex flex-col gap-4">
+                      {buildingGroups.map(group => (
+                        <BuildingGroupCard key={group.name} buildingGroup={group} />
+                      ))}
                     </div>
-                    {/* <div>
-                    <Text size="sm" c="dimmed" mb={4}>Resources Spent</Text>
-                    <Group gap="md">
-                      <Badge variant="light" color="orange" size="lg">
-                        Wood: {gameStats.resourcesSpent.wood.toLocaleString()}
-                      </Badge>
-                      <Badge variant="light" color="gray" size="lg">
-                        Iron: {gameStats.resourcesSpent.iron.toLocaleString()}
-                      </Badge>
-                      <Badge variant="light" color="blue" size="lg">
-                        Workers: {gameStats.resourcesSpent.workers.toLocaleString()}
-                      </Badge>
-                    </Group>
-                  </div> */}
-                  </Group>
-                </Paper>
+                  </div>
+                </TabsContent>
 
-                {/* Village Card */}
-                <VillageCard villageStats={villageStats} />
+                <TabsContent value="project-tree">
+                  <ProjectTree
+                    hasPlayer={!!playerName}
+                    personalActivities={playerStats?.personalActivities ?? []}
+                  />
+                </TabsContent>
 
-                {/* Building Groups */}
-                <Stack gap="md">
-                  {buildingGroups.map((group, index) => (
-                    <BuildingGroupCard key={index} buildingGroup={group} />
-                  ))}
-                </Stack>
-              </Stack>
-            </Tabs.Panel>
+                <TabsContent value="heatmap">
+                  <PlayerHeatmap
+                    hasPlayer={!!playerName}
+                    isLoading={filteredGameStats.isLoading}
+                    mapConfig={gameOverview.mapConfig}
+                    mapImage={gameOverview.mapImage}
+                    mapTiles={filteredGameStats.mapTiles}
+                  />
+                </TabsContent>
 
-            {/* Project Tree Tab Content */}
-            <Tabs.Panel value="project-tree" pt="md">
-              <Paper p="xl" withBorder>
-                <Text ta="center" c="dimmed">
-                  Project Tree view coming soon...
-                </Text>
-              </Paper>
-            </Tabs.Panel>
+                <TabsContent value="game-stats">
+                  <PlayerGameStats
+                    hasPlayer={!!playerName}
+                    isLoading={filteredGameStats.isLoading}
+                    error={filteredGameStats.error ?? gameOverview.error}
+                    filter={playerFilter}
+                    total={gameOverview.totalData}
+                    filteredData={filteredGameStats.filteredData}
+                  />
+                </TabsContent>
+              </Tabs>
+            </TabsContent>
           </Tabs>
+        </div>
+      </div>
 
-        </Stack>
-      </Container>
-
-      {/* Build Timeline - only show on Village tab, fixed at bottom */}
-      {activeTab === 'village' && (
+      {showTimeline && (
         <BuildTimeline
           timelineSteps={playerStats?.buildActivities}
-          currentStep={currentTimelineStep}
-          onStepChange={handleTimelineStepChange}
+          currentStep={timelineStep}
+          onStepChange={setTimelineStep}
         />
       )}
     </>
   );
 }
-

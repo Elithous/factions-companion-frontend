@@ -1,16 +1,16 @@
 import "./globals.scss";
-import '@mantine/core/styles.css';
-import '@mantine/dates/styles.css';
 
 import { Suspense } from "react";
 import localFont from 'next/font/local';
-import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from '@mantine/core';
-import Navbar from "@/components/navbar/navbar";
-import { mantineTheme } from "@/theme/mantine-theme";
+import Navbar from "@/components/layout/Navbar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import type { Metadata } from "next";
 
-const factionsFont = localFont({ src: './retrogaming.ttf' });
+const factionsFont = localFont({
+  src: './retrogaming.ttf',
+  variable: '--font-retrogaming',
+});
 
 export const metadata: Metadata = {
   title: "Factions Companion",
@@ -23,19 +23,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" {...mantineHtmlProps}>
-      <head>
-        <ColorSchemeScript />
-      </head>
+    <html lang="en" className={factionsFont.variable}>
       <body id="mainbody"
-        className={`${factionsFont.className} sans-serif`}
-        style={{ backgroundColor: '#8D6A3F' }}>
-        <MantineProvider theme={mantineTheme}>
+        className={`${factionsFont.className} sans-serif`}>
+        <TooltipProvider>
           <Suspense>
             {children}
             <Navbar />
           </Suspense>
-        </MantineProvider>
+        </TooltipProvider>
       </body>
     </html>
   );

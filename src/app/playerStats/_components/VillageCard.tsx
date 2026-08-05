@@ -1,5 +1,5 @@
-import { Paper, Group, Text, Stack } from '@mantine/core';
-import { VillageStats } from '../page';
+import { Card } from '@/components/ui/card';
+import type { VillageStats } from '@/types/player';
 
 interface VillageCardProps {
   villageStats: VillageStats;
@@ -7,42 +7,29 @@ interface VillageCardProps {
 
 export default function VillageCard({ villageStats }: VillageCardProps) {
   return (
-    <Paper p="md" withBorder className="building-group-card village-card">
-      <Group align="flex-start" gap="md">
+    <Card className="building-group-card village-card p-4">
+      <div className="flex items-start gap-4">
         {/* Village Image - placeholder for now */}
         <div className="building-image-placeholder">
-          <Text size="xs" c="dimmed" ta="center">Image</Text>
+          <p className="text-center text-xs text-muted-foreground">Image</p>
         </div>
 
         {/* Village Info */}
-        <Stack gap="xs" style={{ flex: 1 }}>
-          <Text size="lg" fw={600}>Village</Text>
-          
-          <Text size="md">Level {villageStats.level}</Text>
-          
-          <Group gap="md">
-            <Text size="sm" c="dimmed">
-              {villageStats.buildingCount}/{villageStats.totalCount} Buildings
-            </Text>
-            <Text size="sm" c="dimmed">
-              {villageStats.specialSlots} Special Slots
-            </Text>
-          </Group>
+        <div className="flex flex-1 flex-col gap-1">
+          <p className="text-lg font-semibold">Village</p>
 
-          {/* <Group gap="md" mt="xs">
-            <Badge variant="light" color="orange" size="sm">
-              Wood: {villageStats.resourcesSpent.wood.toLocaleString()}
-            </Badge>
-            <Badge variant="light" color="gray" size="sm">
-              Iron: {villageStats.resourcesSpent.iron.toLocaleString()}
-            </Badge>
-            <Badge variant="light" color="blue" size="sm">
-              Workers: {villageStats.resourcesSpent.workers.toLocaleString()}
-            </Badge>
-          </Group> */}
-        </Stack>
-      </Group>
-    </Paper>
+          <p className="text-base">Level {villageStats.level}</p>
+
+          <div className="flex gap-4">
+            <p className="text-sm text-muted-foreground">
+              {villageStats.buildingCount}/{villageStats.totalCount} Buildings
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {villageStats.specialSlots} Special Slots
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
-

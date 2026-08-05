@@ -1,245 +1,140 @@
 "use client";
 
-import { Paper, Stack, Text, Tooltip } from '@mantine/core';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { Card } from '@/components/ui/card';
+import { SimpleTooltip } from '@/components/ui/tooltip';
+import type { BuildActivity } from '@/types/player';
+
+import { useDragScroll } from '../_hooks/useDragScroll';
+
+type StepType = 'build' | 'upgrade' | 'delete';
 
 interface TimelineStep {
   id: number;
-  type: 'build' | 'upgrade' | 'delete';
+  type: StepType;
   buildingName: string;
   fromLevel?: number;
   toLevel?: number;
-  imageUrl?: string;
 }
 
 interface BuildTimelineProps {
-  timelineSteps: {
-    type: 'building_built' | 'building_upgraded' | 'building_destroyed' | 'hq_upgraded';
-    name: string;
-    level: number;
-    timestamp: number;
-  }[] | undefined,
+  timelineSteps: BuildActivity[] | undefined;
   currentStep: number;
   onStepChange: (step: number) => void;
 }
 
-const BOX_WIDTH = 40; // Fixed width for each timeline box
+/** Fixed width of each timeline box, in px. */
+const BOX_WIDTH = 40;
 
-export default function BuildTimeline({ timelineSteps, currentStep, onStepChange }: BuildTimelineProps) {
-  const timelineContainerRef = useRef<HTMLDivElement>(null);
-  const timelineContentRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [dragStartScroll, setDragStartScroll] = useState(0);
-  const [hoveredStep, setHoveredStep] = useState<number | null>(null);
-  const [timeline, setTimeline] = useState<TimelineStep[]>([]);
+const STEP_TYPES: Partial<Record<BuildActivity['type'], StepType>> = {
+  building_built: 'build',
+  building_upgraded: 'upgrade',
+  hq_upgraded: 'upgrade',
+  building_destroyed: 'delete',
+};
 
-  useEffect(() => {
-    if (!timelineSteps?.length) {
-      setTimeline([]);
-      return;
-    }
+const STEP_ICONS: Record<StepType, string> = { build: '+', upgrade: '✓', delete: '✕' };
 
-    let id = 0;
-    const timeline: TimelineStep[] = timelineSteps.map((step) => {
-      let type: 'build' | 'upgrade' | 'delete' | null = null;
-      if (step.type === 'building_built') {
-        type = 'build';
-      } else if (step.type === 'building_upgraded' || step.type === 'hq_upgraded') {
-        type = 'upgrade';
-      } else if (step.type === 'building_destroyed') {
-        type = 'delete';
-      }
-      if (!type) return null;
-      const result: any = { id: id++, type, buildingName: step.name };
-      if (type === 'build') result.toLevel = step.level;
-      if (type === 'upgrade') {
-        result.fromLevel = step.level - 1;
-        result.toLevel = step.level;
-      }
-      return result;
-    }).filter(Boolean) as TimelineStep[];
-    setTimeline(timeline);
-  }, [timelineSteps])
+const STEP_COLORS: Record<StepType, string> = {
+  build: '#51cf66',
+  upgrade: '#51cf66',
+  delete: '#ff6b6b',
+};
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!timelineContainerRef.current) return;
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStartX(e.clientX);
-    setDragStartScroll(timelineContainerRef.current.scrollLeft);
-  }, []);
+function toTimeline(activities: BuildActivity[]): TimelineStep[] {
+  return activities.flatMap((activity, index) => {
+    const type = STEP_TYPES[activity.type];
+    if (!type) return [];
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !timelineContainerRef.current) return;
-    const deltaX = dragStartX - e.clientX;
-    const newScrollLeft = dragStartScroll + deltaX;
-    timelineContainerRef.current.scrollLeft = Math.max(
-      0,
-      Math.min(newScrollLeft, timelineContainerRef.current.scrollWidth - timelineContainerRef.current.clientWidth)
-    );
-  }, [isDragging, dragStartX, dragStartScroll]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (!timelineContainerRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const container = timelineContainerRef.current;
-    // Convert vertical scroll to horizontal scroll
-    container.scrollLeft += e.deltaY;
-  }, []);
-
-  // Add wheel event listener to prevent page scroll
-  useEffect(() => {
-    const container = timelineContainerRef.current;
-    if (!container) return;
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-    };
-  }, [handleWheel]);
-
-  // Center the current step when it changes
-  useEffect(() => {
-    if (!timelineContainerRef.current) return;
-    const container = timelineContainerRef.current;
-    const centerX = container.clientWidth / 2;
-    // first box is at position '0', each subsequent box is BOX_WIDTH further
-    const targetScrollLeft = (currentStep * BOX_WIDTH) - centerX + (BOX_WIDTH / 2);
-    const maxScroll = container.scrollWidth - container.clientWidth;
-
-    container.scrollTo({
-      left: Math.max(0, Math.min(targetScrollLeft, maxScroll)),
-      behavior: 'smooth'
-    });
-  }, [currentStep]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  const getStepDisplayText = (step: TimelineStep): string => {
-    switch (step.type) {
-      case 'build':
-        return `Built ${step.buildingName}`;
-      case 'upgrade':
-        return `Upgraded ${step.buildingName || 'HQ'} Level ${step.fromLevel} -> ${step.toLevel}`;
-      case 'delete':
-        return `Deleted ${step.buildingName}`;
-      default:
-        return step.buildingName;
-    }
-  };
-
-  const getStepIcon = (type: TimelineStep['type']): string => {
-    switch (type) {
-      case 'build':
-        return '+';
-      case 'upgrade':
-        return '✓';
-      case 'delete':
-        return '✕';
-      default:
-        return '○';
-    }
-  };
-
-  const getStepColor = (type: TimelineStep['type']): string => {
-    switch (type) {
-      case 'build':
-      case 'upgrade':
-        return '#51cf66'; // green
-      case 'delete':
-        return '#ff6b6b'; // red
-      default:
-        return '#868e96'; // gray
-    }
-  };
-
-  return (
-    <Paper p="md" withBorder className="build-timeline-container">
-      <Stack gap="md">
-        {/* Timeline Bar */}
-        <div
-          ref={timelineContainerRef}
-          className="timeline-bar-container"
-          onMouseDown={handleMouseDown}
-          style={{
-            cursor: isDragging ? 'grabbing' : 'grab',
-            height: `${BOX_WIDTH}px`,
-            paddingBottom: '55px'
-          }}
-        >
-          <div
-            ref={timelineContentRef}
-            className="timeline-bar-content"
-            style={{
-              width: `${timeline.length * BOX_WIDTH}px`,
-              position: 'relative',
-              height: `${BOX_WIDTH}px`,
-            }}
-          >
-            {/* Timeline Steps */}
-            { timeline.map((step, index) => {
-              const isActive = index === currentStep;
-              const isHovered = index === hoveredStep;
-
-              return (
-                <Tooltip
-                  key={index}
-                  label={step ? getStepDisplayText(step) : `Step ${index + 1}`}
-                  position="top"
-                  disabled={!step}
-                >
-                  <div
-                    className={`timeline-step ${isActive ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
-                    style={{
-                      position: 'absolute',
-                      left: `${index * BOX_WIDTH}px`,
-                      width: `${BOX_WIDTH}px`,
-                      height: `${BOX_WIDTH}px`,
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      backgroundColor: step ? getStepColor(step.type) : 'rgba(134, 142, 150, 0.3)',
-                      opacity: isActive ? 1 : 0.6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'opacity 0.2s',
-                      boxSizing: 'border-box',
-                    }}
-                    onMouseEnter={() => setHoveredStep(index)}
-                    onMouseLeave={() => setHoveredStep(null)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStepChange(index);
-                    }}
-                  >
-                    {step && (
-                      <Text size="xs" c="white" fw={700}>
-                        {getStepIcon(step.type)}
-                      </Text>
-                    )}
-                  </div>
-                </Tooltip>
-              );
-            })}
-          </div>
-        </div>
-      </Stack>
-    </Paper>
-  );
+    return [{
+      id: index,
+      type,
+      buildingName: activity.name,
+      fromLevel: type === 'upgrade' ? activity.level - 1 : undefined,
+      toLevel: type === 'delete' ? undefined : activity.level,
+    }];
+  });
 }
 
+function describeStep(step: TimelineStep): string {
+  switch (step.type) {
+    case 'build':
+      return `Built ${step.buildingName}`;
+    case 'upgrade':
+      return `Upgraded ${step.buildingName || 'HQ'} Level ${step.fromLevel} -> ${step.toLevel}`;
+    case 'delete':
+      return `Deleted ${step.buildingName}`;
+  }
+}
+
+/** Horizontal scrubber over a player's build history. */
+export default function BuildTimeline({ timelineSteps, currentStep, onStepChange }: BuildTimelineProps) {
+  const { ref, isDragging, onMouseDown, centerOn } = useDragScroll<HTMLDivElement>();
+  const [hoveredStep, setHoveredStep] = useState<number | null>(null);
+
+  const timeline = useMemo(() => toTimeline(timelineSteps ?? []), [timelineSteps]);
+
+  useEffect(() => {
+    centerOn(currentStep * BOX_WIDTH, BOX_WIDTH);
+  }, [currentStep, centerOn]);
+
+  return (
+    <Card className="build-timeline-container p-4">
+      <div
+        ref={ref}
+        className="timeline-bar-container"
+        onMouseDown={onMouseDown}
+        style={{
+          cursor: isDragging ? 'grabbing' : 'grab',
+          height: `${BOX_WIDTH}px`,
+          paddingBottom: '55px',
+        }}
+      >
+        <div
+          className="timeline-bar-content"
+          style={{
+            position: 'relative',
+            width: `${timeline.length * BOX_WIDTH}px`,
+            height: `${BOX_WIDTH}px`,
+          }}
+        >
+          {timeline.map((step, index) => {
+            const isActive = index === currentStep;
+
+            return (
+              <SimpleTooltip key={step.id} label={describeStep(step)} side="top">
+                <div
+                  className={`timeline-step ${isActive ? 'active' : ''} ${index === hoveredStep ? 'hovered' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${index * BOX_WIDTH}px`,
+                    width: `${BOX_WIDTH}px`,
+                    height: `${BOX_WIDTH}px`,
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    backgroundColor: STEP_COLORS[step.type],
+                    opacity: isActive ? 1 : 0.6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s',
+                    boxSizing: 'border-box',
+                  }}
+                  onMouseEnter={() => setHoveredStep(index)}
+                  onMouseLeave={() => setHoveredStep(null)}
+                  onClick={e => {
+                    e.stopPropagation();
+                    onStepChange(index);
+                  }}
+                >
+                  <span className="text-xs font-bold text-white">{STEP_ICONS[step.type]}</span>
+                </div>
+              </SimpleTooltip>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+  );
+}

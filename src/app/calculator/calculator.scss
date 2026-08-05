@@ -115,16 +115,6 @@
   padding: var(--calculator-spacing-md);
 }
 
-// HoverCard Styles
-.mantine-HoverCard-dropdown {
-  width: 200px !important;
-  background-color: var(--calculator-hovercard-bg) !important;
-  border: 1px solid var(--calculator-border-color);
-  border-radius: var(--calculator-radius-sm);
-  padding: var(--calculator-spacing-sm);
-  box-shadow: var(--calculator-shadow-md);
-}
-
 // Responsive Design
 @media (max-width: 768px) {
   .table-base {

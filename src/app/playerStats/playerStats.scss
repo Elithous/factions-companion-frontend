@@ -1,16 +1,26 @@
-@use "../../app/globals.scss" as global;
+@use "../globals.scss" as global;
 
 :root {
   --player-stats-spacing: 1rem;
   --timeline-height: 80px;
 }
 
-.selectors-section {
-  background-color: var(--orange-800);
-  border-radius: 0.5rem;
+// Overlay shown while the Game Stats / Heatmap tabs are loading. Their
+// container has position: relative so this covers just that card, not the
+// whole page (same pattern as app/stats/stats.scss's .loading-overlay).
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: inherit;
+  backdrop-filter: blur(2px);
+  z-index: 10;
 }
 
-.game-stats-section {
+.selectors-section {
   background-color: var(--orange-800);
   border-radius: 0.5rem;
 }

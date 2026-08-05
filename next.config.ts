@@ -12,9 +12,6 @@ const nextConfig: NextConfig = {
         destination: `${API_URL}:${API_PORT}/:path*`
       }
     ]
-  },
-  experimental: {
-    optimizePackageImports: ['@mantine/core', '@mantine/hooks']
   }
 };
 
