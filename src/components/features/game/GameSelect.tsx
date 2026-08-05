@@ -1,6 +1,5 @@
 "use client";
 
-import { Gamepad2 } from "lucide-react";
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 
 import { getGames } from '@/lib/api/reports';
@@ -48,10 +47,7 @@ export default function GameSelect({ gameId, setGameId }: GameSelectProps) {
   return (
     <Card className="p-4">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Gamepad2 size={20} />
-          <p className="text-lg font-medium">Select Game</p>
-        </div>
+        <p className="text-lg font-medium">Select Game</p>
         {isLoading && <Spinner size={16} />}
       </div>
 

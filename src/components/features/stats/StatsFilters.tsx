@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Filter, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from "react";
 
 import { getActivePlayerOptions } from '@/lib/api/reports';
@@ -12,6 +12,7 @@ import { Slider } from '@/components/ui/slider';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import type { StatsFilter } from '@/types/stats';
 
+// @ts-ignore: SCSS side-effect import without module declarations
 import './filters.scss';
 
 export interface StatsFiltersProps {
@@ -136,10 +137,7 @@ export default function StatsFilters({
   return (
     <div className='filters-container'>
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Filter size={20} />
-          <p className="text-lg font-medium">Filters</p>
-        </div>
+        <p className="text-lg font-medium">Filters</p>
         <div className="flex items-center gap-2">
           <SimpleTooltip label="Toggle advanced filters">
             <Button variant="ghost" onClick={() => setIsExpanded(prev => !prev)}>

@@ -1,10 +1,9 @@
-import { BarChart3, Filter } from 'lucide-react';
-
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { StatsFilter, ToFromFaction } from '@/types/stats';
 
 import StatsTable from './StatsTable';
+// @ts-ignore: SCSS side-effect import without module declarations
 import './stats.scss';
 
 interface StatsPanelProps {
@@ -41,10 +40,7 @@ export default function StatsPanel({ filter, data }: StatsPanelProps) {
     <div className='stats-container flex flex-col gap-6'>
       {data?.total && (
         <Card className='faction-totals p-4 shadow-sm'>
-          <div className="mb-4 flex items-center gap-2">
-            <BarChart3 size={20} />
-            <p className="text-lg font-medium">Total Statistics</p>
-          </div>
+          <p className="mb-4 text-lg font-medium">Total Statistics</p>
           <StatsTable data={data.total} title="Totals by Faction" />
         </Card>
       )}
@@ -52,10 +48,7 @@ export default function StatsPanel({ filter, data }: StatsPanelProps) {
       {data?.filtered && (
         <Card className='filtered-totals p-4 shadow-sm'>
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter size={20} />
-              <p className="text-lg font-medium">Filtered Statistics</p>
-            </div>
+            <p className="text-lg font-medium">Filtered Statistics</p>
             {hasActiveFilters && <Badge className="bg-primary/20 text-primary">Active Filters</Badge>}
           </div>
 

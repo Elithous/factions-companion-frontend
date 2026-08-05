@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from "react";
-import { ArrowLeft, ArrowRight, FileDown, FileUp, Shrink } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -41,10 +41,7 @@ function BuildColumn({
       <div className="flex items-center justify-between">
         <p className='title'>{title}</p>
         <SimpleTooltip label="Combine buildings of the same type and level">
-          <Button size="sm" onClick={onCondense}>
-            <Shrink size={14} />
-            Condense
-          </Button>
+          <Button size="sm" onClick={onCondense}>Condense</Button>
         </SimpleTooltip>
       </div>
       <BuildingsPanel buildings={buildings} setBuildings={setBuildings} hq={hq} setHq={setHq} />
@@ -90,14 +87,8 @@ export default function CalculatorPage() {
               <CalculatorConfig config={config} setConfig={setConfig} />
             </PopoverContent>
           </Popover>
-          <Button onClick={() => setImportOpen(true)}>
-            <FileUp size={16} />
-            Import
-          </Button>
-          <Button onClick={handleExport}>
-            <FileDown size={16} />
-            Export
-          </Button>
+          <Button onClick={() => setImportOpen(true)}>Import</Button>
+          <Button onClick={handleExport}>Export</Button>
         </div>
       </div>
 
