@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import {
   Building,
+  BuildingCatalogue,
   GameConfig,
   ResourceCost,
   ScalingValues,
@@ -17,6 +18,8 @@ interface BuildTipsProps {
   plan: BuildPlan;
   currentResources: ResourceCost;
   config: GameConfig | undefined;
+  /** The selected game's catalogue; costs are read from it. */
+  catalogue: BuildingCatalogue | undefined;
 }
 
 interface UpgradeTip {
@@ -38,17 +41,17 @@ const signed = (value: number) => `${value > 0 ? '+' : ''}${value}`;
  * For each building in the current build, shows what levelling it up one step
  * would cost and whether that brings the goal build closer or pushes it away.
  */
-export default function BuildTips({ plan, currentResources, config }: BuildTipsProps) {
+export default function BuildTips({ plan, currentResources, config, catalogue }: BuildTipsProps) {
   const tips = useMemo<UpgradeTip[]>(() => {
     if (!config) return [];
 
-    const baseTicks = getTicksToGoal(plan, config, currentResources);
+    const baseTicks = getTicksToGoal(catalogue, plan, config, currentResources);
 
     return plan.currentBuild.flatMap(building => {
       if (!building.type) return [];
 
       // Price the upgrade, then re-run the projection with it applied.
-      const perBuilding = getBuildingCost(building.type, building.level + 1, config);
+      const perBuilding = getBuildingCost(catalogue, building.type, building.level + 1, config);
       const upgradeCost: ResourceCost = {
         wood: perBuilding.wood * building.count,
         iron: perBuilding.iron * building.count,
@@ -60,6 +63,7 @@ export default function BuildTips({ plan, currentResources, config }: BuildTipsP
       );
 
       const testTicks = getTicksToGoal(
+        catalogue,
         { ...plan, currentBuild: upgradedBuild },
         config,
         currentResources,

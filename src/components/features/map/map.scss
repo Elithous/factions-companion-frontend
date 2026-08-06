@@ -68,13 +68,100 @@
 }
 
 .settings-popover {
-  background-color: var(--orange-700);
+  background-color: var(--orange-800);
   border-radius: var(--radius-md);
-  padding: var(--spacing-sm);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 
-  &:hover {
-    background-color: var(--orange-800);
-    transition: background-color var(--transition-fast);
+  .setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--orange-900);
+  }
+
+  .setting-hint {
+    font-size: 0.7rem;
+    opacity: 0.65;
+    line-height: 1.35;
+  }
+
+  .settings-select {
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background-color: var(--orange-900);
+    color: var(--text-color);
+    border: 1px solid var(--orange-900);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+  }
+
+  // Metric switch — two buttons sharing one bordered track.
+  .segmented {
+    display: flex;
+    overflow: hidden;
+    border: 1px solid var(--orange-900);
+    border-radius: var(--radius-sm);
+
+    button {
+      flex: 1;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      background-color: transparent;
+      color: var(--text-color);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background-color var(--transition-fast) ease;
+
+      &:hover {
+        background-color: var(--orange-700);
+      }
+
+      &.active {
+        background-color: var(--orange-900);
+        font-weight: 600;
+      }
+    }
+  }
+
+  .custom-colors {
+    display: flex;
+    gap: var(--spacing-sm);
+
+    input[type='color'] {
+      flex: 1;
+      height: 1.75rem;
+      padding: 0;
+      background: none;
+      border: 1px solid var(--orange-900);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+  }
+
+  .gradient-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    .gradient-preview-bar {
+      height: 0.75rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--orange-900);
+    }
+
+    .gradient-preview-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      opacity: 0.65;
+    }
+  }
+
+  .reset-button {
+    align-self: center;
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
   }
 }

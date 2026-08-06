@@ -11,9 +11,18 @@ import type { StatsFilter } from "@/types/stats";
  * `useFilteredStats`) scoped to a single-player filter, and only fetches
  * once both a game and a player are selected.
  */
-export function usePlayerGameStats(gameId: string, playerName: string | null) {
-  const activeGameId = playerName ? gameId : '';
-  const filter = useMemo<StatsFilter>(() => ({ playerName: playerName || undefined }), [playerName]);
+export function usePlayerGameStats(
+  gameId: string,
+  playerId: number | null,
+  playerName?: string | null,
+) {
+  const activeGameId = playerId !== null ? gameId : '';
+  // `playerId` is what narrows the query; the name rides along for the filter
+  // badge only.
+  const filter = useMemo<StatsFilter>(
+    () => ({ playerId: playerId ?? undefined, playerName: playerName ?? undefined }),
+    [playerId, playerName],
+  );
 
   const overview = useGameOverview(activeGameId);
   const filtered = useFilteredStats(activeGameId, filter);
@@ -23,5 +32,6 @@ export function usePlayerGameStats(gameId: string, playerName: string | null) {
     overview,
     filtered,
     error: overview.error ?? filtered.error,
+    isLoading: overview.isLoading || filtered.isLoading,
   };
 }

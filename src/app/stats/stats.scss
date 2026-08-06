@@ -68,10 +68,7 @@
   @media (min-width: 1200px) {
     flex: 1 0 var(--filters-flex-desktop);
   }
-
-  &:hover {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
-  }
+  // Page-level hover lift removed to match filters.scss — see the note there.
 }
 
 .stats-container {

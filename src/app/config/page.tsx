@@ -13,11 +13,12 @@ import {
   ApiGameConfig,
   BASE_COST_MULTI,
   BuildingNameType,
-  BuildingOptions,
   configFromApi,
   getBuildingCost,
   getHqCost,
+  toBuildingOptions,
 } from "@/lib/game";
+import { useBuildingCatalogue } from "@/hooks/useBuildingCatalogue";
 
 const COST_TABLE_HEAD = ['Level', 'Wood', 'Iron', 'Worker'];
 
@@ -45,6 +46,10 @@ export default function ConfigPage() {
   const [type, setType] = useState<BuildingNameType | null>(null);
   const [maxLevel, setMaxLevel] = useState(15);
 
+  // Buildings and their costs are game-specific, so the catalogue follows the
+  // selected game. With none picked the backend serves the newest game's.
+  const { catalogue } = useBuildingCatalogue(gameId);
+
   useEffect(() => {
     if (!gameId) return;
 
@@ -64,20 +69,20 @@ export default function ConfigPage() {
   const hqCostTable: SimpleTableData = useMemo(() => ({
     head: COST_TABLE_HEAD,
     body: levels.map(level => {
-      const cost = getHqCost(level, gameConfig);
+      const cost = getHqCost(catalogue, level, gameConfig);
       return [level, cost.wood, cost.iron, cost.worker];
     }),
-  }), [levels, gameConfig]);
+  }), [catalogue, levels, gameConfig]);
 
   const costTable: SimpleTableData = useMemo(() => ({
     head: COST_TABLE_HEAD,
     body: type
       ? levels.map(level => {
-          const cost = getBuildingCost(type, level, gameConfig);
+          const cost = getBuildingCost(catalogue, type, level, gameConfig);
           return [level, cost.wood, cost.iron, cost.worker];
         })
       : [],
-  }), [levels, type, gameConfig]);
+  }), [catalogue, levels, type, gameConfig]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -95,7 +100,7 @@ export default function ConfigPage() {
               <Combobox
                 value={type}
                 onChange={v => setType(v as BuildingNameType | null)}
-                options={BuildingOptions}
+                options={toBuildingOptions(catalogue)}
                 triggerClassName="w-fit min-w-[180px]"
               />
             </div>

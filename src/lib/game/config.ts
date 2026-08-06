@@ -63,6 +63,24 @@ export function isValidConfig(value: unknown): value is GameConfig {
 }
 
 /** Raw shape returned by the backend's `report/games/config` endpoint. */
+/**
+ * One entry of the game config's `buildings` array.
+ *
+ * The normalised form served by `report/games/buildings` is what the app
+ * actually consumes — see `./catalogue`. This raw shape is only what the game
+ * config itself carries.
+ */
+export interface ApiBuildingConfig {
+  name: string;
+  /** May be empty: not every building belongs to a category. */
+  category: string[];
+  shape?: string;
+  tiers?: number;
+  maxCount?: number | null;
+  upgradeable?: boolean;
+  destructible?: boolean;
+}
+
 export interface ApiGameConfig {
   misc: {
     parameters: {
@@ -74,6 +92,7 @@ export interface ApiGameConfig {
       hq_worker_cost_multiplier: number;
     };
   };
+  buildings?: ApiBuildingConfig[];
   mapConfig?: unknown;
 }
 

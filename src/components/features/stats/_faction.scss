@@ -1,0 +1,41 @@
+// Shared faction colouring for the stats components.
+//
+// Both the faction totals table and the tile drill-down paint the same five
+// faction colours onto chips, bars and timeline segments. Keeping the palette
+// mapping here means a colour change lands in one place.
+
+@use "sass:color";
+@use '../../../app/globals.scss' as global;
+
+/// Applies the faction background colour based on a `.RED` / `.BLUE` / ... class.
+@mixin faction-fills {
+  &.BLUE { background-color: global.$faction-blue; }
+  &.RED { background-color: global.$faction-red; }
+  &.GREEN { background-color: global.$faction-green; }
+  &.YELLOW { background-color: global.$faction-yellow; }
+  &.NEUTRAL { background-color: global.$faction-neutral; }
+  &.UNOWNED { background-color: color.adjust(global.$faction-neutral, $lightness: -22%); }
+}
+
+/// The same palette, darkened a step, for row hover.
+@mixin faction-fills-hover {
+  &.BLUE { background-color: color.adjust(global.$faction-blue, $lightness: -5%); }
+  &.RED { background-color: color.adjust(global.$faction-red, $lightness: -5%); }
+  &.GREEN { background-color: color.adjust(global.$faction-green, $lightness: -5%); }
+  &.YELLOW { background-color: color.adjust(global.$faction-yellow, $lightness: -5%); }
+  &.NEUTRAL { background-color: color.adjust(global.$faction-neutral, $lightness: -10%); }
+  &.UNOWNED { background-color: color.adjust(global.$faction-neutral, $lightness: -30%); }
+}
+
+/// The pill shape used to label a faction inline.
+@mixin faction-chip-base {
+  display: inline-block;
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  color: var(--orange-100);
+  white-space: nowrap;
+}

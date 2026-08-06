@@ -7,10 +7,13 @@ import {
   getGameTimespan,
   getSoldiersByFaction,
   getSoldiersByTile,
+  getTileDetail,
 } from "@/lib/api/reports";
+import { toBuildingCategoryMap, type BuildingCategoryMap } from "@/lib/game/buildingAssets";
+import type { HeatmapMetric } from "@/lib/heatmap";
 import { getMapImage } from "@/lib/maps";
 import type { MapConfig, MapTilesListModel } from "@/types/map";
-import type { StatsFilter, ToFromFaction } from "@/types/stats";
+import type { StatsFilter, TileDetail, ToFromFaction } from "@/types/stats";
 import type { StaticImageData } from "next/image";
 
 export interface StatsError {
@@ -25,7 +28,7 @@ function toQueryParams(gameId: string, filter: StatsFilter) {
     unitType: filter.type,
     tileX: filter.tile?.x?.toString(),
     tileY: filter.tile?.y?.toString(),
-    playerName: filter.playerName || undefined,
+    playerId: filter.playerId,
     fromFaction: filter.fromFaction,
     toFaction: filter.toFaction,
     dateStart: filter.dateRange ? (filter.dateRange[0] / 1000).toString() : undefined,
@@ -47,13 +50,20 @@ export function useGameOverview(gameId: string) {
   const [dateRange, setDateRange] = useState<[number, number]>();
   const [mapConfig, setMapConfig] = useState<MapConfig>();
   const [mapImage, setMapImage] = useState<StaticImageData>();
+  // Each game carries its own building catalogue; the bundled table is stale.
+  const [buildingCategories, setBuildingCategories] = useState<BuildingCategoryMap>();
   const [error, setError] = useState<StatsError | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!gameId) return;
+    if (!gameId) {
+      setIsLoading(false);
+      return;
+    }
 
     let cancelled = false;
     setError(null);
+    setIsLoading(true);
     setTotalData({});
     setDateRange(undefined);
 
@@ -70,17 +80,29 @@ export function useGameOverview(gameId: string) {
         const map = (config as { mapConfig?: MapConfig }).mapConfig;
         setMapConfig(map);
         setMapImage(getMapImage(map?.name));
+        setBuildingCategories(toBuildingCategoryMap(config?.buildings));
       })
-      .catch(err => !cancelled && setError(toError('Failed to load game data', err)));
+      .catch(err => !cancelled && setError(toError('Failed to load game data', err)))
+      .finally(() => !cancelled && setIsLoading(false));
 
     return () => { cancelled = true; };
   }, [gameId]);
 
-  return { totalData, dateRange, mapConfig, mapImage, error };
+  return { totalData, dateRange, mapConfig, mapImage, buildingCategories, error, isLoading };
 }
 
-/** Soldier flows and tile heat for the currently applied filter. */
-export function useFilteredStats(gameId: string, filter: StatsFilter) {
+/**
+ * Soldier flows and tile heat for the currently applied filter.
+ *
+ * `metric` only reaches the by-tile report: the faction table is a soldier
+ * flow between factions and has no worker equivalent, so it stays as-is when
+ * the heatmap switches to workers.
+ */
+export function useFilteredStats(
+  gameId: string,
+  filter: StatsFilter,
+  metric: HeatmapMetric = 'soldiers',
+) {
   const [filteredData, setFilteredData] = useState<ToFromFaction>({});
   const [mapTiles, setMapTiles] = useState<MapTilesListModel>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +116,7 @@ export function useFilteredStats(gameId: string, filter: StatsFilter) {
     try {
       const [soldiers, tiles] = await Promise.all([
         getSoldiersByFaction(params),
-        getSoldiersByTile(params),
+        getSoldiersByTile({ ...params, unitType: metric }),
       ]);
 
       setFilteredData(soldiers);
@@ -119,7 +141,7 @@ export function useFilteredStats(gameId: string, filter: StatsFilter) {
     } finally {
       setIsLoading(false);
     }
-  }, [gameId, filter]);
+  }, [gameId, filter, metric]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -127,4 +149,43 @@ export function useFilteredStats(gameId: string, filter: StatsFilter) {
   }, [gameId, load]);
 
   return { filteredData, mapTiles, isLoading, error };
+}
+
+/**
+ * The full breakdown for the currently selected tile.
+ *
+ * Returns `null` data when no tile is selected, so the panel can simply not
+ * render rather than every caller having to guard on `filter.tile`.
+ */
+export function useTileDetail(gameId: string, filter: StatsFilter) {
+  const [detail, setDetail] = useState<TileDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<StatsError | null>(null);
+
+  const tile = filter.tile;
+
+  useEffect(() => {
+    if (!gameId || !tile) {
+      setDetail(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    getTileDetail(toQueryParams(gameId, filter))
+      .then(data => !cancelled && setDetail(data))
+      .catch(err => {
+        if (cancelled) return;
+        setDetail(null);
+        setError(toError('Failed to load tile details', err));
+      })
+      .finally(() => !cancelled && setIsLoading(false));
+
+    return () => { cancelled = true; };
+  }, [gameId, filter]);
+
+  return { detail, isLoading, error };
 }

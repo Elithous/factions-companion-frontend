@@ -6,10 +6,8 @@
   --filter-gap: var(--spacing-sm);
   --filter-radius: var(--radius-md);
   --filter-bg: rgba(0, 0, 0, 0.05);
-  --filter-hover-bg: rgba(0, 0, 0, 0.08);
   --filter-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --filter-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --filter-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   --filter-border-color: var(--orange-900);
   --filter-input-bg: var(--orange-800);
   --filter-input-hover-bg: var(--orange-700);
@@ -27,11 +25,9 @@
   box-shadow: var(--filter-shadow);
   transition: var(--filter-transition);
   border: 1px solid var(--filter-border-color);
-
-  &:hover {
-    background-color: var(--filter-hover-bg);
-    box-shadow: var(--filter-hover-shadow);
-  }
+  // No :hover here on purpose — repainting the whole panel as the pointer
+  // crosses it says nothing about what's under the cursor. The individual
+  // inputs still have their own hover states.
 
   // Basic Filters
   .basic-filters {

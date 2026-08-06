@@ -12,13 +12,21 @@ import { Label } from '@/components/ui/label';
 import { NumberInput } from '@/components/ui/number-input';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { useDebouncedEffect } from '@/hooks/useDebouncedEffect';
-import { Building, BuildingData, BuildingNameType, BuildingOptions } from '@/lib/game';
+import {
+  Building,
+  BuildingCatalogue,
+  BuildingNameType,
+  findBuilding,
+  toBuildingOptions,
+} from '@/lib/game';
 
 /** How long to wait after the last keystroke before pushing edits upward. */
 const EDIT_DEBOUNCE_MS = 300;
 
 export interface BuildingRowProps {
   data: Building;
+  /** The selected game's catalogue, which supplies the pickable buildings. */
+  catalogue: BuildingCatalogue | undefined;
   updateData: (row: Building) => void;
   /** True when the village is at its building cap. */
   disableCount: boolean;
@@ -30,6 +38,7 @@ export interface BuildingRowProps {
 /** One draggable building stack: type, count and level. */
 export default function BuildingRow({
   data,
+  catalogue,
   updateData,
   disableCount,
   id,
@@ -51,17 +60,17 @@ export default function BuildingRow({
   };
 
   // Unique buildings can only ever have a count of one.
+  //
+  // Re-runs when the catalogue arrives, not just on type change: it's fetched,
+  // so on first render there's nothing to look the building up in yet.
   useEffect(() => {
-    if (type === data.type) return;
+    const isUnique = !!findBuilding(catalogue, type)?.unique;
+    setCountDisabled(isUnique);
 
-    const buildingData = BuildingData.find(building => building.name === type);
-    if (buildingData?.unique) {
-      setCountDisabled(true);
-      setCount(1);
-    } else {
-      setCountDisabled(false);
-    }
-  }, [type]);
+    // Only force the count down when the user actually picked a new type —
+    // doing it on mount would clobber a stored value.
+    if (isUnique && type !== data.type) setCount(1);
+  }, [type, catalogue, data.type]);
 
   useDebouncedEffect(
     () => updateData({ id: data.id, type, count: +count, level: +level, sortOrder: data.sortOrder }),
@@ -89,7 +98,7 @@ export default function BuildingRow({
           <Combobox
             value={type}
             onChange={v => setType(v as BuildingNameType)}
-            options={BuildingOptions}
+            options={toBuildingOptions(catalogue)}
             clearable={false}
             triggerClassName="w-48"
           />

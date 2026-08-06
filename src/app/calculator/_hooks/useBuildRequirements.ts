@@ -2,7 +2,13 @@
 
 import { useMemo } from "react";
 
-import { GameConfig, ResourceCost, getRemainingCosts, getTicksToGoal } from "@/lib/game";
+import {
+  BuildingCatalogue,
+  GameConfig,
+  ResourceCost,
+  getRemainingCosts,
+  getTicksToGoal,
+} from "@/lib/game";
 
 import type { BuildPlan } from "./useBuildPlan";
 
@@ -17,6 +23,7 @@ export interface BuildRequirements {
 
 /** Cost and time still standing between the current build and the goal build. */
 export function useBuildRequirements(
+  catalogue: BuildingCatalogue | undefined,
   plan: BuildPlan,
   config: GameConfig | undefined,
   currentResources: ResourceCost,
@@ -24,13 +31,13 @@ export function useBuildRequirements(
   return useMemo(() => {
     if (!config) return null;
 
-    const remainingCosts = getRemainingCosts(plan, config);
-    const ticks = getTicksToGoal(plan, config, currentResources);
+    const remainingCosts = getRemainingCosts(catalogue, plan, config);
+    const ticks = getTicksToGoal(catalogue, plan, config, currentResources);
 
     return {
       remainingCosts,
       ticks,
       totalTicks: Math.max(ticks.wood, ticks.iron, ticks.worker, 0),
     };
-  }, [plan, config, currentResources]);
+  }, [catalogue, plan, config, currentResources]);
 }

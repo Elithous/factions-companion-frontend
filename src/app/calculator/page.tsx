@@ -6,7 +6,8 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SimpleTooltip } from '@/components/ui/tooltip';
-import { Building, ResourceCost, ScalingTypes } from '@/lib/game';
+import { Building, BuildingCatalogue, ResourceCost, ScalingTypes } from '@/lib/game';
+import { useBuildingCatalogue } from '@/hooks/useBuildingCatalogue';
 
 import BuildTips from './_components/BuildTips';
 import BuildingsPanel from './_components/BuildingsPanel';
@@ -24,6 +25,7 @@ const NO_RESOURCES: ResourceCost = { wood: 0, iron: 0, worker: 0 };
 function BuildColumn({
   title,
   buildings,
+  catalogue,
   setBuildings,
   hq,
   setHq,
@@ -31,6 +33,7 @@ function BuildColumn({
 }: {
   title: string;
   buildings: Building[];
+  catalogue: BuildingCatalogue | undefined;
   setBuildings: (buildings: Building[]) => void;
   hq: number;
   setHq: (hq: number) => void;
@@ -44,7 +47,13 @@ function BuildColumn({
           <Button size="sm" onClick={onCondense}>Condense</Button>
         </SimpleTooltip>
       </div>
-      <BuildingsPanel buildings={buildings} setBuildings={setBuildings} hq={hq} setHq={setHq} />
+      <BuildingsPanel
+        buildings={buildings}
+        catalogue={catalogue}
+        setBuildings={setBuildings}
+        hq={hq}
+        setHq={setHq}
+      />
     </div>
   );
 }
@@ -52,12 +61,15 @@ function BuildColumn({
 export default function CalculatorPage() {
   const { plan, update, config, setConfig, copyBuild, condense, toExportData, applyImport } = useBuildPlan();
 
+  // No game picker here, so the backend serves the newest game's catalogue.
+  const { catalogue, isLoading: isCatalogueLoading, error: catalogueError } = useBuildingCatalogue();
+
   const [currentResources, setCurrentResources] = useState<ResourceCost>(NO_RESOURCES);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportText, setExportText] = useState('');
 
-  const requirements = useBuildRequirements(plan, config, currentResources);
+  const requirements = useBuildRequirements(catalogue, plan, config, currentResources);
 
   const setResource = useCallback((resource: ScalingTypes, value: number) => {
     setCurrentResources(prev => ({ ...prev, [resource]: value }));
@@ -78,6 +90,15 @@ export default function CalculatorPage() {
   return (
     <div className="calculator-container">
       <div className="calculator-header">
+        {catalogueError && (
+          <p className="text-sm text-destructive">{catalogueError}</p>
+        )}
+        {!catalogueError && !isCatalogueLoading && catalogue.gameId && (
+          <p className="text-xs text-muted-foreground">
+            Costs from game {catalogue.gameId}
+            {catalogue.isDefault ? ' (most recent)' : ''}
+          </p>
+        )}
         <div className="flex gap-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -96,6 +117,7 @@ export default function CalculatorPage() {
         <BuildColumn
           title="Current"
           buildings={plan.currentBuild}
+          catalogue={catalogue}
           setBuildings={setCurrentBuild}
           hq={plan.currentHq}
           setHq={setCurrentHq}
@@ -114,6 +136,7 @@ export default function CalculatorPage() {
         <BuildColumn
           title="Goal"
           buildings={plan.goalBuild}
+          catalogue={catalogue}
           setBuildings={setGoalBuild}
           hq={plan.goalHq}
           setHq={setGoalHq}
@@ -123,8 +146,8 @@ export default function CalculatorPage() {
 
       <p className='title'>Totals</p>
       <div className="flex flex-wrap gap-4">
-        <OutputTable title="Current Output" buildings={plan.currentBuild} config={config} />
-        <OutputTable title="Goal Output" buildings={plan.goalBuild} config={config} />
+        <OutputTable title="Current Output" buildings={plan.currentBuild} config={config} catalogue={catalogue} />
+        <OutputTable title="Goal Output" buildings={plan.goalBuild} config={config} catalogue={catalogue} />
       </div>
 
       <CostSummary
@@ -133,7 +156,7 @@ export default function CalculatorPage() {
         setResource={setResource}
       />
 
-      <BuildTips plan={plan} currentResources={currentResources} config={config} />
+      <BuildTips plan={plan} currentResources={currentResources} config={config} catalogue={catalogue} />
 
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImport={applyImport} />
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} value={exportText} />

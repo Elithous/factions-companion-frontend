@@ -12,7 +12,6 @@ import { Slider } from '@/components/ui/slider';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import type { StatsFilter } from '@/types/stats';
 
-// @ts-ignore: SCSS side-effect import without module declarations
 import './filters.scss';
 
 export interface StatsFiltersProps {
@@ -88,7 +87,7 @@ export default function StatsFilters({
   }, [bounds]);
 
   useEffect(() => {
-    if (!filter.playerName) setPlayer(null);
+    if (filter.playerId === undefined) setPlayer(null);
   }, [filter]);
 
   useEffect(() => {
@@ -123,10 +122,16 @@ export default function StatsFilters({
       .catch(error => console.error('Error fetching players:', error));
   }, [gameId]);
 
+  // `player` holds the combobox value, which is the player id as a string.
   useEffect(() => {
-    const next = player || '';
-    if (filter.playerName !== next) updateFilter({ playerName: next });
-  }, [player]);
+    const playerId = player ? Number(player) : undefined;
+    if (filter.playerId === playerId) return;
+
+    updateFilter({
+      playerId,
+      playerName: playerList.find(option => option.value === player)?.label,
+    });
+  }, [player, playerList]);
 
   const handleReset = useCallback(() => {
     setPlayer(null);

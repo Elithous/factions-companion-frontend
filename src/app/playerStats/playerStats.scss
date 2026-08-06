@@ -2,7 +2,21 @@
 
 :root {
   --player-stats-spacing: 1rem;
-  --timeline-height: 80px;
+
+  // Must match BOX_WIDTH in BuildTimeline.tsx, which positions the boxes.
+  --timeline-box-size: 48px;
+  // Thin enough not to need clearance below the boxes.
+  --timeline-scrollbar: 6px;
+  --timeline-padding: 0.4rem;
+  /**
+   * Total height of the fixed bar: the boxes, the scrollbar under them, the
+   * card's padding on both sides and its top border. Page content reserves this
+   * much bottom margin so nothing hides behind it.
+   */
+  --timeline-height: calc(
+    var(--timeline-box-size) + var(--timeline-scrollbar) +
+    (var(--timeline-padding) * 2) + 1px
+  );
 }
 
 // Overlay shown while the Game Stats / Heatmap tabs are loading. Their
@@ -20,9 +34,294 @@
   z-index: 10;
 }
 
-.selectors-section {
+/* -------------------------------------------------------------------------- */
+/* Player header and search                                                   */
+/* -------------------------------------------------------------------------- */
+
+// The one control that applies to the whole page, so it sits above the tabs.
+.player-search,
+.game-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-width: 320px;
+}
+
+// The game search belongs to the Games tab, so it needs a little air below it.
+.game-search {
+  margin: var(--spacing-md) 0;
+}
+
+.player-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
   background-color: var(--orange-800);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
+}
+
+.player-header-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  background-color: var(--orange-900);
+  border: 2px solid var(--orange-700);
+  border-radius: var(--radius-md);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--orange-200);
+}
+
+.player-header-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.player-header-identity {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.player-header-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+// Shown next to the name because names aren't stable — this is what links and
+// reports actually key on.
+.player-header-id {
+  font-size: 1rem;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-header-aliases {
+  margin-left: var(--spacing-xs);
+  padding: 1px var(--spacing-sm);
+  background-color: var(--orange-900);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--orange-200);
+  cursor: help;
+}
+
+.player-header-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.player-header-score {
+  font-size: 0.95rem;
+
+  strong {
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// A small dot rather than a label; the tooltip carries the meaning.
+.player-header-online {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: #51cf66;
+  box-shadow: 0 0 0 2px rgba(81, 207, 102, 0.25);
+}
+
+.player-header-clan {
+  padding: 1px var(--spacing-sm);
+  border: 1px solid var(--orange-900);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  opacity: 0.85;
+  cursor: help;
+}
+
+// Shown when the upstream profile failed; the local totals are still valid.
+.player-header-warning {
+  padding: 1px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--orange-900);
+  font-size: 0.7rem;
+  color: hsl(var(--destructive));
+  cursor: help;
+}
+
+.player-header-avatar img {
+  border-radius: var(--radius-md);
+  image-rendering: pixelated;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Overview                                                                   */
+/* -------------------------------------------------------------------------- */
+
+.overview-summary,
+.overview-totals {
+  padding: var(--spacing-md);
+  background-color: var(--orange-800);
+  border-radius: var(--radius-md);
+}
+
+.overview-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+
+  & + & {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--orange-900);
+  }
+}
+
+.overview-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-xs);
+}
+
+.overview-stat-label {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.overview-stat-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-totals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+
+  th,
+  td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    text-align: right;
+  }
+
+  // Row labels sit on the left; the value columns are right-aligned so figures
+  // line up when they arrive.
+  tbody th[scope='row'] {
+    text-align: left;
+    font-weight: 500;
+  }
+
+  thead th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--orange-200);
+    border-bottom: 2px solid var(--orange-900);
+  }
+
+  tbody tr.nested th[scope='row'] {
+    padding-left: var(--spacing-lg);
+    font-weight: 400;
+    font-size: 0.85rem;
+    opacity: 0.75;
+  }
+}
+
+
+.overview-note {
+  margin-top: var(--spacing-md);
+  font-size: 0.78rem;
+  opacity: 0.6;
+  line-height: 1.4;
+}
+
+
+// Wraps the Game Log sub-tabs so the loading overlay can be scoped to them.
+.gamelog-panel {
+  position: relative;
+}
+
+// Covers the Game Log panel while a newly selected game loads, tab strip
+// included. The minimum height gives the spinner somewhere to sit while the
+// panel underneath is still empty.
+.gamelog-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  min-height: 12rem;
+  background-color: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(2px);
+  z-index: 5;
+}
+
+.gamelog-loading-text {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+// Badges sit over the building sprite, so they need their own solid backing —
+// a text shadow alone isn't enough against detailed pixel art.
+.timeline-step-action,
+.timeline-step-count {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+// Action goes top-left, where the sprites have the least detail.
+.timeline-step-action {
+  top: 1px;
+  left: 1px;
+}
+
+// Level reached (or count) bottom-right, opposite the action.
+.timeline-step-count {
+  right: 1px;
+  bottom: 1px;
+  background-color: rgba(0, 0, 0, 0.75);
+}
+
+// A demolished building gets a diagonal strike as well as the ✕ badge, so the
+// distinction survives at a glance and doesn't rely on colour alone.
+.timeline-step-strike {
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1.5px),
+    rgba(201, 42, 42, 0.95) calc(50% - 1.5px),
+    rgba(201, 42, 42, 0.95) calc(50% + 1.5px),
+    transparent calc(50% + 1.5px)
+  );
 }
 
 .player-activities-stack {
@@ -35,82 +334,273 @@
   border-radius: 0.2rem;
 }
 
-.building-image-placeholder {
-  width: 80px;
-  height: 80px;
-  min-width: 80px;
-  background-color: var(--orange-900);
-  border-radius: 0.5rem;
+// Replaced by <BuildingIcon>, which brings its own frame from the category
+// artwork; only the mobile size override below still applies.
+
+/* -------------------------------------------------------------------------- */
+/* Project tree                                                               */
+/* -------------------------------------------------------------------------- */
+
+.project-tree-groups {
   display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.project-tree-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+// The path heads its branch. Given its own band so the eye can find where one
+// branch ends and the next begins, and tinted to match the in-game tree.
+.project-tree-category {
+  align-self: flex-start;
+  padding: 2px var(--spacing-sm);
+  background-color: var(--orange-900);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--orange-200);
+  border-left: 3px solid transparent;
+
+  &.path-military { border-left-color: #d9534f; }
+  &.path-economy { border-left-color: #4f8f5a; }
+  &.path-worker { border-left-color: #e0a33a; }
+  &.path-support { border-left-color: #b455b4; }
+  // No colour: the path isn't known, rather than being a fifth path.
+  &.path-unassigned {
+    border-left-color: var(--orange-600);
+    opacity: 0.75;
+  }
+}
+
+.project-tree-items {
+  --tree-indent: 1.25rem;
+
+  display: flex;
+  flex-direction: column;
+}
+
+// One row, indented by its tier. Each row draws its own elbow, and a vertical
+// run down the left so the chain reads as connected rather than as loose rows.
+.project-tree-item {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-xs) var(--spacing-md);
+  padding: var(--spacing-xs) 0 var(--spacing-xs)
+    calc((var(--depth) * var(--tree-indent)) + var(--tree-indent));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  // Vertical run, sitting just left of the row's own text.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--depth) * var(--tree-indent) + 0.4rem);
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+
+  // Elbow joining the run to the row.
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0.95rem;
+    left: calc(var(--depth) * var(--tree-indent) + 0.4rem);
+    width: 0.55rem;
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
+// Position in the section's pick order. Fixed width so the names line up
+// regardless of whether the number is one or two digits.
+.project-tree-order {
+  flex-shrink: 0;
+  min-width: 1.6rem;
+  margin-right: var(--spacing-xs);
+  padding: 1px 4px;
+  background-color: var(--orange-900);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--orange-200);
+}
+
+// Name and effect stack together, taking the slack so the meta column stays
+// right-aligned.
+.project-tree-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.project-tree-name {
+  font-weight: 500;
+}
+
+.project-tree-effects {
+  font-size: 0.75rem;
+  opacity: 0.72;
+  line-height: 1.35;
+}
+
+// A pick that couldn't be pinned to a single node. Marked rather than hidden,
+// so the tree doesn't imply more certainty than it has.
+.project-tree-flag {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 1rem;
+  height: 1rem;
+  margin-left: var(--spacing-xs);
+  border-radius: 50%;
+  background-color: var(--orange-900);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--orange-300);
+  cursor: help;
+}
+
+.project-tree-item.ambiguous .project-tree-name {
+  font-style: italic;
+}
+
+.project-tree-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  font-size: 0.8rem;
+  color: var(--text-color);
+  opacity: 0.65;
+}
+
+.project-tree-tier {
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------- */
+
+// Keeps page content clear of the fixed bar.
+.with-build-timeline {
+  margin-bottom: var(--timeline-height);
 }
 
 .build-timeline-container {
-  background-color: var(--orange-800);
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 100;
+  // Tight vertical padding: the bar is chrome, and every pixel here comes off
+  // the page above it.
+  padding: var(--timeline-padding) var(--player-stats-spacing);
   margin: 0;
+  background-color: var(--orange-800);
   border-radius: 0;
-  border-top-left-radius: 0.5rem;
-  border-top-right-radius: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .timeline-bar-container {
   width: 100%;
-  background-color: var(--orange-900);
-  border-radius: 0.5rem;
+  // Exactly the boxes plus the scrollbar beneath them. The old rule padded 55px
+  // below a 48px bar to keep a full-width scrollbar clear of the content.
+  height: calc(var(--timeline-box-size) + var(--timeline-scrollbar));
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  user-select: none;
   overflow-x: auto;
   overflow-y: hidden;
-  
-  scroll-padding-top: 20px;
-//   // Hide scrollbar
-//   scrollbar-width: none; /* Firefox */
-//   -ms-overflow-style: none; /* IE and Edge */
-  
-//   &::-webkit-scrollbar {
-//     display: none; /* Chrome, Safari, Opera */
-//   }
+  user-select: none;
+  cursor: grab;
+  background-color: var(--orange-900);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+
+  &.dragging {
+    cursor: grabbing;
+  }
+
+  // A slim scrollbar that sits under the boxes instead of needing space made
+  // for it.
+  scrollbar-width: thin;
+  scrollbar-color: var(--orange-600) transparent;
+
+  &::-webkit-scrollbar {
+    height: var(--timeline-scrollbar);
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--orange-600);
+    border-radius: 3px;
+
+    &:hover {
+      background-color: var(--orange-500);
+    }
+  }
 }
 
 .timeline-bar-content {
+  position: relative;
   min-width: 100%;
+  height: var(--timeline-box-size);
 }
 
+// The box no longer has a coloured fill to dim, so selection and hover are
+// carried by opacity and an outline around the frame instead.
 .timeline-step {
+  cursor: pointer;
+  opacity: 0.65;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition-fast) ease, box-shadow var(--transition-fast) ease;
+
   &:hover {
-    opacity: 1 !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
   }
 
   &.active {
-    border-color: #339af0 !important;
-    box-shadow: 0 0 0 2px rgba(51, 154, 240, 0.5);
+    opacity: 1;
+    box-shadow: 0 0 0 2px #339af0;
   }
 }
 
 // Responsive adjustments
 @media (max-width: 768px) {
   .building-group-card {
-    .building-image-placeholder {
-      width: 60px;
-      height: 60px;
-      min-width: 60px;
+    .building-icon {
+      width: 60px !important;
+      height: 60px !important;
     }
   }
 
-  .timeline-bar {
-    height: 60px;
+  // Only the horizontal padding changes. The box size can't be overridden here:
+  // BuildTimeline positions the boxes in JS at BOX_WIDTH intervals, so shrinking
+  // just the CSS var would leave the container too short and clip them.
+  //
+  // (A `.timeline-bar { height: 60px }` rule used to sit here; no element has
+  // ever carried that class.)
+  .build-timeline-container {
+    padding-inline: var(--spacing-sm);
   }
 }
 

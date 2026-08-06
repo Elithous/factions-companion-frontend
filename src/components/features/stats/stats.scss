@@ -1,32 +1,43 @@
-@use "sass:color";
-@use '../../../app/globals.scss' as global;
+@use './faction' as faction;
 
 // CSS Custom Properties
+//
+// Deliberately *not* named `--stats-gap`: `app/stats/stats.scss` already defines
+// that on :root for the map/filters row, and redefining it here would silently
+// change that layout.
 :root {
-  --stats-padding: var(--spacing-md);
-  --stats-gap: var(--spacing-lg);
+  --stats-card-gap: var(--spacing-lg);
   --stats-radius: var(--radius-md);
   --stats-border-width: 2px;
-  --stats-hover-opacity: 0.1;
-  --stats-cell-padding: var(--spacing-xs) var(--spacing-sm);
+  // Chunky rows: the solid colour blocks need height to read as blocks.
+  --stats-cell-padding: var(--spacing-sm) var(--spacing-sm);
+  // Dark gutter between one sending faction's block and the next.
+  --stats-group-gap: 6px;
   --stats-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --stats-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   --stats-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   --stats-bg: rgba(0, 0, 0, 0.05);
   --stats-hover-bg: rgba(0, 0, 0, 0.08);
-  --stats-min-width: 400px;
+  // Narrow enough that the two cards pair up on a tablet, wide enough that the
+  // table never has to wrap a faction chip.
+  --stats-min-width: 340px;
 }
 
 // Container Layout
+//
+// The page-level chrome for `.stats-container` (background, padding, flex-basis
+// within the map/filter row) lives in `app/stats/stats.scss`. This rule only
+// owns the internal grid, so the two cards sit side by side whenever the
+// container is wide enough for them and stack on narrow screens.
 .stats-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--stats-min-width), 1fr));
-  gap: var(--stats-gap);
-  padding: var(--stats-padding);
+  gap: var(--stats-card-gap);
   width: 100%;
   align-items: start;
 
-  // When only one section is visible, center it
+  // When only one section is visible, centre it rather than letting it stretch
+  // across the full width.
   &:has(.faction-totals:only-child),
   &:has(.filtered-totals:only-child) {
     grid-template-columns: minmax(var(--stats-min-width), 800px);
@@ -35,93 +46,166 @@
 }
 
 // Stats Sections
-.faction-totals,
-.filtered-totals {
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  height: 100%;
   background-color: var(--stats-bg);
   border-radius: var(--stats-radius);
   box-shadow: var(--stats-shadow);
-  transition: var(--stats-transition);
   overflow: hidden;
-  height: 100%;
+  // No :hover here on purpose — lighting up the whole card as the pointer
+  // crosses it drowns out the row highlight, which is the one that's actually
+  // telling you something.
+}
 
-  &:hover {
-    background-color: var(--stats-hover-bg);
-    box-shadow: var(--stats-hover-shadow);
-  }
+.stats-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  min-height: 1.75rem;
+}
 
-  // Active Filters Display
-  .active-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background-color: rgba(0, 0, 0, 0.02);
-    border-radius: var(--radius-sm);
-  }
+.stats-card-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+// Active Filters Display
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-sm);
 }
 
 // Stats Table
+//
+// Long tables scroll inside the card instead of stretching it, which keeps the
+// two cards the same height when they sit side by side.
+//
+// The height cap has to go on `<Table>`'s own `overflow-auto` wrapper rather
+// than on ours: that element is already a scroll container, so it — not an outer
+// div — is what the sticky header sticks to.
+.stats-table-wrapper {
+  border-radius: var(--radius-sm);
+}
+
 .stats-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  // Line the digits up so the numbers can be compared down the column.
+  font-variant-numeric: tabular-nums;
+
+  .stats-table-caption {
+    caption-side: top;
+    padding-bottom: var(--spacing-sm);
+    font-weight: 500;
+    text-align: left;
+  }
 
   // Table Header
-  thead {
-    th {
-      padding: var(--stats-cell-padding);
-      font-weight: 600;
-      color: var(--text-color);
-      text-align: center;
-      border-bottom: var(--stats-border-width) solid var(--orange-900);
+  thead th {
+    position: sticky;
+    top: 0;
+    // Must outrank the positioned cells in the body — those sit at z-index 1 and
+    // come later in the DOM, so an equal value lets them paint over the header.
+    z-index: 3;
+    padding: var(--stats-cell-padding);
+    // Opaque, and darker than the card, so rows don't bleed through it while
+    // scrolling and the header reads as its own band.
+    background-color: var(--orange-900);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: left;
+    color: var(--orange-200);
+    border-bottom: var(--stats-border-width) solid var(--orange-900);
+
+    &.numeric {
+      text-align: right;
     }
   }
 
   // Table Body
   tbody {
     tr {
-      transition: var(--stats-transition);
+      td {
+        padding: var(--stats-cell-padding);
+        vertical-align: middle;
+        // No row rules: adjacent cells of the same faction are meant to read as
+        // one solid block down the column.
+      }
 
+      // Hover darkens this row only — the faction blocks and the bar step down a
+      // shade together so the whole row moves as a unit.
       &:hover {
-        background-color: rgba(0, 0, 0, var(--stats-hover-opacity));
-
-        .total {
-          background-color: var(--orange-800);
-        }
+        background-color: rgba(0, 0, 0, 0.14);
 
         .faction,
         .fill {
-          &.BLUE { background-color: color.adjust(global.$faction-blue, $lightness: -5%); }
-          &.RED { background-color: color.adjust(global.$faction-red, $lightness: -5%); }
-          &.GREEN { background-color: color.adjust(global.$faction-green, $lightness: -5%); }
-          &.YELLOW { background-color: color.adjust(global.$faction-yellow, $lightness: -5%); }
-          &.NEUTRAL { background-color: color.adjust(global.$faction-neutral, $lightness: -10%); }
+          @include faction.faction-fills-hover;
         }
       }
+    }
 
-      td {
-        padding: var(--stats-cell-padding);
-        text-align: center;
-        position: relative;
-        transition: var(--stats-transition);
-      }
+    // A gap marks where one sending faction's block ends and the next begins.
+    tr.group-start:not(:first-child) td {
+      border-top: var(--stats-group-gap) solid var(--orange-900);
+    }
+  }
+
+  tfoot .stats-total-row td {
+    padding: var(--stats-cell-padding);
+    font-weight: 600;
+    border-top: var(--stats-border-width) solid var(--orange-900);
+
+    &.numeric {
+      text-align: right;
     }
   }
 }
 
 // Stats Row
 .stats-row {
-  // Total Column
+  // Faction Columns — solid, full-bleed blocks of colour rather than inline
+  // pills. Same-faction cells butt up against each other to form one bar down
+  // the column, which is what makes the groups readable at a glance.
+  .faction {
+    min-width: 100px;
+    font-weight: 500;
+    text-align: center;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--orange-100);
+
+    @include faction.faction-fills;
+  }
+
+  // Total Column — the bar sits behind the figure rather than in its own
+  // column, which keeps the table to three columns at card width.
   .total {
     position: relative;
-    min-width: 120px;
+    min-width: 130px;
+    text-align: right;
+    overflow: hidden;
 
     .fill {
       position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      transition: var(--stats-transition);
+      inset: 0 auto 0 0;
+      // Full strength, edge to edge — the bar is a block of faction colour, not
+      // a tint behind the number.
+      transition: width var(--transition-normal) ease;
+
+      @include faction.faction-fills;
     }
 
     .value {
@@ -129,46 +213,41 @@
       z-index: 1;
       font-weight: 500;
     }
-  }
 
-  // Faction Columns
-  .faction {
-    font-weight: 500;
-    text-transform: uppercase;
-    min-width: 100px;
-  }
-
-  // Faction Colors
-  .faction,
-  .fill {
-    @mixin faction-color($color) {
-      background-color: $color;
-      transition: var(--stats-transition);
+    .share {
+      position: relative;
+      z-index: 1;
+      display: inline-block;
+      min-width: 3.25rem;
+      font-size: 0.75rem;
+      opacity: 0.7;
     }
-
-    &.BLUE { @include faction-color(global.$faction-blue); }
-    &.RED { @include faction-color(global.$faction-red); }
-    &.GREEN { @include faction-color(global.$faction-green); }
-    &.YELLOW { @include faction-color(global.$faction-yellow); }
-    &.NEUTRAL { @include faction-color(global.$faction-neutral); }
   }
+}
+
+.stats-empty {
+  padding: var(--spacing-lg);
+  text-align: center;
+  opacity: 0.7;
 }
 
 // Responsive Design
 @media (max-width: 768px) {
-  .stats-container {
-    padding: var(--spacing-sm);
-  }
-
   .stats-table {
     font-size: 0.9rem;
+  }
 
-    .total {
-      min-width: 100px;
-    }
-
+  .stats-row {
     .faction {
       min-width: 80px;
+    }
+
+    .total {
+      min-width: 110px;
+
+      .share {
+        min-width: 2.75rem;
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-import { BaseHqWoodOutput, BaseStorage, BuildingData } from './buildings.data';
+import { findBuilding, type BuildingCatalogue } from './catalogue';
 import { defaultConfig } from './config';
 import {
   Building,
@@ -24,12 +24,15 @@ type BaseEffect = {
   multiplier?: number;
 };
 
-/** Walk every effect of every building in a build. */
-function forEachEffect(buildings: Building[], visit: (effect: BaseEffect, building: Building) => void) {
+/** Walk every effect of every building in a build, per the game's catalogue. */
+function forEachEffect(
+  catalogue: BuildingCatalogue | undefined,
+  buildings: Building[],
+  visit: (effect: BaseEffect, building: Building) => void,
+) {
   buildings.forEach(building => {
-    if (!building.type) return;
-    const buildingData = BuildingData.find(data => data.name === building.type);
-    buildingData?.baseEffects.forEach(effect => visit(effect as BaseEffect, building));
+    findBuilding(catalogue, building.type)?.baseEffects
+      .forEach(effect => visit(effect as BaseEffect, building));
   });
 }
 
@@ -49,13 +52,14 @@ function zeroTotals<K extends string>(keys: readonly K[]): TotalsMap<K> {
  * Replaces the three near-identical `getTotal*Modifiers` functions.
  */
 export function getTotalModifiers<K extends string>(
+  catalogue: BuildingCatalogue | undefined,
   buildings: Building[],
   kind: EffectKind,
   keys: readonly K[],
 ): ModifierMap<K> {
   const totalMods = neutralModifiers(keys);
 
-  forEachEffect(buildings, (effect, building) => {
+  forEachEffect(catalogue, buildings, (effect, building) => {
     if (effect.type !== kind) return;
     const subtype = effect.subtype as K;
     if (!(subtype in totalMods)) return;
@@ -91,6 +95,7 @@ function applyModifiers<K extends string>(
  * matching percent and final multipliers to get the `final` column.
  */
 function accumulateBaseEffects<K extends string>(
+  catalogue: BuildingCatalogue | undefined,
   buildings: Building[],
   kind: EffectKind,
   keys: readonly K[],
@@ -99,7 +104,7 @@ function accumulateBaseEffects<K extends string>(
 ): TotalsMap<K> {
   const totals = seed;
 
-  forEachEffect(buildings, (effect, building) => {
+  forEachEffect(catalogue, buildings, (effect, building) => {
     if (effect.type !== kind || typeof effect.base !== 'number') return;
     const subtype = effect.subtype as K;
     if (!(subtype in totals)) return;
@@ -116,10 +121,11 @@ function accumulateBaseEffects<K extends string>(
 
 /** Per-tick production of a build, before and after multipliers. */
 export function getTotalOutput(
+  catalogue: BuildingCatalogue | undefined,
   buildings: Building[],
   config: GameConfig | undefined,
 ): TotalsMap<MultiplierTypes> {
-  const modifiers = getTotalModifiers(buildings, 'production', MultiplierValues);
+  const modifiers = getTotalModifiers(catalogue, buildings, 'production', MultiplierValues);
   const multipliers = applyModifiers(
     (config ?? defaultConfig).prod_multi,
     modifiers,
@@ -130,18 +136,20 @@ export function getTotalOutput(
 
   // The HQ produces wood on its own, before any buildings are counted.
   const hqMulti = multipliers.wood;
-  totals.wood.base += BaseHqWoodOutput;
-  totals.wood.final += BaseHqWoodOutput * (1 + (hqMulti?.percent ?? 0) / 100) * (hqMulti?.final ?? 1);
+  const hqWood = catalogue?.baseHqWoodOutput ?? 0;
+  totals.wood.base += hqWood;
+  totals.wood.final += hqWood * (1 + (hqMulti?.percent ?? 0) / 100) * (hqMulti?.final ?? 1);
 
-  return accumulateBaseEffects(buildings, 'production', MultiplierValues, multipliers, totals);
+  return accumulateBaseEffects(catalogue, buildings, 'production', MultiplierValues, multipliers, totals);
 }
 
 /** Storage capacity of a build, before and after multipliers. */
 export function getTotalStorage(
+  catalogue: BuildingCatalogue | undefined,
   buildings: Building[],
   config: GameConfig | undefined,
 ): TotalsMap<StorageTypes> {
-  const modifiers = getTotalModifiers(buildings, 'storage', StorageValues);
+  const modifiers = getTotalModifiers(catalogue, buildings, 'storage', StorageValues);
   const multipliers = applyModifiers(
     (config ?? defaultConfig).storage_multi,
     modifiers,
@@ -156,19 +164,23 @@ export function getTotalStorage(
   // is preserved so displayed numbers don't shift during the refactor.
   StorageValues.forEach(value => {
     const multis = multipliers[value];
-    totals[value].base += BaseStorage[value];
-    totals[value].final += (BaseStorage[value] + (multis?.percent ?? 0) / 100) * (multis?.final ?? 1);
+    const base = catalogue?.baseStorage[value] ?? 0;
+    totals[value].base += base;
+    totals[value].final += (base + (multis?.percent ?? 0) / 100) * (multis?.final ?? 1);
   });
 
-  return accumulateBaseEffects(buildings, 'storage', StorageValues, multipliers, totals);
+  return accumulateBaseEffects(catalogue, buildings, 'storage', StorageValues, multipliers, totals);
 }
 
 /**
  * Flat world-map bonuses (attack %, defense %, ...) contributed by a build.
  * These are additive percentages, so only the `bonus` half is meaningful.
  */
-export function getTotalWorldEffects(buildings: Building[]): { [key in WorldEffectTypes]: number } {
-  const modifiers = getTotalModifiers(buildings, 'world', WorldEffectValues);
+export function getTotalWorldEffects(
+  catalogue: BuildingCatalogue | undefined,
+  buildings: Building[],
+): { [key in WorldEffectTypes]: number } {
+  const modifiers = getTotalModifiers(catalogue, buildings, 'world', WorldEffectValues);
 
   return Object.fromEntries(
     WorldEffectValues.map(key => [key, modifiers[key].bonus]),
@@ -179,9 +191,13 @@ export function getTotalWorldEffects(buildings: Building[]): { [key in WorldEffe
  * Effective attack/defense soldier counts: raw soldier output scaled by the
  * build's own world bonuses plus the player's configured world multipliers.
  */
-export function getEffectiveCombatStrength(buildings: Building[], config: GameConfig) {
-  const soldiers = getTotalOutput(buildings, config).soldiers.final;
-  const worldEffects = getTotalWorldEffects(buildings);
+export function getEffectiveCombatStrength(
+  catalogue: BuildingCatalogue | undefined,
+  buildings: Building[],
+  config: GameConfig,
+) {
+  const soldiers = getTotalOutput(catalogue, buildings, config).soldiers.final;
+  const worldEffects = getTotalWorldEffects(catalogue, buildings);
 
   const effectiveFor = (kind: 'attack' | 'defense') => {
     const { percent, final } = config.world_multi[kind];

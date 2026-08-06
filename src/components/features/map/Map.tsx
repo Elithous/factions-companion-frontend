@@ -2,25 +2,17 @@
 
 import Image from 'next/image';
 import { useState } from "react";
-import { Settings } from "lucide-react";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SimpleTooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { DEFAULT_MAP_SETTINGS, type MapSettings } from "@/lib/heatmap";
 import type { MapModel, Position } from "@/types/map";
 
-import { MapSettings, useMapCanvas } from "./useMapCanvas";
-import { usePanzoom } from "./usePanzoom";
+import MapSettingsPopover from "./MapSettingsPopover";
+import { useMapCanvas } from "./useMapCanvas";
+import { PANZOOM_EXCLUDE_CLASS, usePanzoom } from "./usePanzoom";
 import "./map.scss";
 
 const INNER_MAP_ID = 'inner-map';
-
-const DEFAULT_SETTINGS: MapSettings = {
-  showHeatmap: true,
-  showGrid: false,
-};
 
 export interface MapProps {
   map: MapModel;
@@ -31,67 +23,15 @@ export interface MapProps {
   tile?: Position;
   coordClicked: (x: number, y: number) => void;
   className?: string;
+  /**
+   * Controlled settings. Omit both to let the map keep its own — only a parent
+   * that can refetch for a different metric should take ownership.
+   */
+  settings?: MapSettings;
+  onSettingsChange?: (settings: MapSettings) => void;
 }
 
-function MapSettingsPopover({
-  settings,
-  setSettings,
-  onResetView,
-}: {
-  settings: MapSettings;
-  setSettings: (settings: MapSettings) => void;
-  onResetView: () => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <SimpleTooltip label="Map Settings">
-          <button
-            type="button"
-            aria-label="Map settings"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-popover/80 text-foreground shadow hover:bg-popover"
-          >
-            <Settings size={18} />
-          </button>
-        </SimpleTooltip>
-      </PopoverTrigger>
-
-      <PopoverContent align="end" className="w-52">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="show-heatmap"
-              checked={settings.showHeatmap}
-              onCheckedChange={checked => setSettings({ ...settings, showHeatmap: checked === true })}
-            />
-            <Label htmlFor="show-heatmap">Show Heatmap</Label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="show-grid"
-              checked={settings.showGrid}
-              onCheckedChange={checked => setSettings({ ...settings, showGrid: checked === true })}
-            />
-            <Label htmlFor="show-grid">Show Grid</Label>
-          </div>
-
-          <div className="flex justify-center pt-1">
-            <button
-              type="button"
-              onClick={onResetView}
-              className="reset-button text-sm underline underline-offset-2 hover:no-underline"
-            >
-              Reset View
-            </button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** Pannable, zoomable game map with an optional soldier-density heatmap. */
+/** Pannable, zoomable game map with an optional density heatmap. */
 export default function Map({
   map,
   coordClicked,
@@ -99,10 +39,15 @@ export default function Map({
   wheelParentDepth = 0,
   mapScale = 1,
   className = '',
+  settings: controlledSettings,
+  onSettingsChange,
 }: MapProps) {
-  const [settings, setSettings] = useState<MapSettings>(DEFAULT_SETTINGS);
+  const [ownSettings, setOwnSettings] = useState<MapSettings>(DEFAULT_MAP_SETTINGS);
   const [showInstructions, setShowInstructions] = useState(true);
   const isMobile = useMediaQuery('(max-width: 768px)');
+
+  const settings = controlledSettings ?? ownSettings;
+  const setSettings = onSettingsChange ?? setOwnSettings;
 
   const panzoomRef = usePanzoom(INNER_MAP_ID, wheelParentDepth, mapScale);
   const { canvasRef, mapDivRef, mapImageRef, handleTileClick, canvasSize } =
@@ -141,17 +86,20 @@ export default function Map({
           />
         </div>
 
-        <div className="map-settings">
+        {/* Excluded from panzoom, or pressing the gear starts a pan and the click
+            never arrives. See PANZOOM_EXCLUDE_CLASS. */}
+        <div className={`map-settings ${PANZOOM_EXCLUDE_CLASS}`}>
           <MapSettingsPopover
             settings={settings}
             setSettings={setSettings}
+            showMetricSwitch={!!onSettingsChange}
             onResetView={() => panzoomRef.current?.zoom(1 / mapScale, { animate: true })}
           />
         </div>
 
         {showInstructions && (
           <p
-            className="map-instructions cursor-pointer text-sm text-muted-foreground"
+            className={`map-instructions ${PANZOOM_EXCLUDE_CLASS} cursor-pointer text-sm text-muted-foreground`}
             onClick={() => setShowInstructions(false)}
           >
             {isMobile

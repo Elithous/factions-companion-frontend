@@ -1,12 +1,6 @@
-import { BuildingData, HqData } from './buildings.data';
+import { emptyCost, findBuilding, type BuildingCatalogue } from './catalogue';
 import { BASE_COST_MULTI } from './config';
-import { Building, BuildingNameType, CostEntry, GameConfig, ResourceCost, ScalingTypes } from './types';
-
-const ZERO_COST: ResourceCost = { wood: 0, iron: 0, worker: 0 };
-
-function emptyCost(): ResourceCost {
-  return { ...ZERO_COST };
-}
+import { Building, CostEntry, GameConfig, ResourceCost, ScalingTypes } from './types';
 
 /**
  * The cost of one level, given a cost curve and the effective per-resource
@@ -35,30 +29,45 @@ function costForLevel(
   return costs;
 }
 
-/** Cost of taking a single building of `type` to `level` (not cumulative). */
+/**
+ * Cost of taking a single building of `type` to `level` (not cumulative).
+ *
+ * Returns zero for a building the catalogue doesn't have — it used to throw,
+ * but the catalogue is now fetched, so an unknown name is an ordinary
+ * mid-load state rather than a programming error.
+ */
 export function getBuildingCost(
-  type: BuildingNameType,
+  catalogue: BuildingCatalogue | undefined,
+  type: string,
   level: number,
   config: GameConfig | undefined,
 ): ResourceCost {
-  const data = BuildingData.find(bData => bData.name === type);
-  if (!data) throw new Error(`Building data not found: ${type}`);
+  const data = findBuilding(catalogue, type);
+  if (!data) return emptyCost();
 
   return costForLevel(data.cost, level, 1, config?.cost_multi?.building, config);
 }
 
 /** Cost of taking the HQ to `hqLevel` (not cumulative). */
-export function getHqCost(hqLevel: number, config: GameConfig | undefined): ResourceCost {
-  if (hqLevel < 2) return emptyCost();
-  return costForLevel(HqData.cost, hqLevel, 2, config?.cost_multi?.hq, config);
+export function getHqCost(
+  catalogue: BuildingCatalogue | undefined,
+  hqLevel: number,
+  config: GameConfig | undefined,
+): ResourceCost {
+  if (hqLevel < 2 || !catalogue) return emptyCost();
+  return costForLevel(catalogue.hq.cost, hqLevel, 2, config?.cost_multi?.hq, config);
 }
 
 /** Cumulative cost of every HQ level up to and including `hqLevel`. */
-export function getTotalHqCost(hqLevel: number, config: GameConfig | undefined): ResourceCost {
+export function getTotalHqCost(
+  catalogue: BuildingCatalogue | undefined,
+  hqLevel: number,
+  config: GameConfig | undefined,
+): ResourceCost {
   const costs = emptyCost();
 
   for (let level = 2; level <= hqLevel; level++) {
-    const levelCost = getHqCost(level, config);
+    const levelCost = getHqCost(catalogue, level, config);
     costs.wood += levelCost.wood;
     costs.iron += levelCost.iron;
     costs.worker += levelCost.worker;
@@ -69,18 +78,19 @@ export function getTotalHqCost(hqLevel: number, config: GameConfig | undefined):
 
 /** Cumulative cost of an entire build: the HQ plus every building level. */
 export function getTotalCosts(
+  catalogue: BuildingCatalogue | undefined,
   hqLevel: number,
   buildings: Building[],
   config: GameConfig | undefined,
 ): ResourceCost {
-  const costs = getTotalHqCost(hqLevel, config);
+  const costs = getTotalHqCost(catalogue, hqLevel, config);
   if (!buildings?.length) return costs;
 
   buildings.forEach(building => {
     if (!building.type) return;
 
     for (let level = 1; level <= building.level; level++) {
-      const levelCost = getBuildingCost(building.type, level, config);
+      const levelCost = getBuildingCost(catalogue, building.type, level, config);
       costs.wood += levelCost.wood * building.count;
       costs.iron += levelCost.iron * building.count;
       costs.worker += levelCost.worker * building.count;

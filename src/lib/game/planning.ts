@@ -1,3 +1,4 @@
+import type { BuildingCatalogue } from './catalogue';
 import { getBuildOverlap, getTotalCosts } from './costs';
 import { getTotalOutput } from './effects';
 import { Building, GameConfig, MultiplierTypes, ResourceCost, ScalingValues } from './types';
@@ -20,12 +21,13 @@ function outputKeyFor(resource: keyof ResourceCost): MultiplierTypes {
  * build that carries over.
  */
 export function getRemainingCosts(
+  catalogue: BuildingCatalogue | undefined,
   { currentHq, currentBuild, goalHq, goalBuild }: BuildComparison,
   config: GameConfig | undefined,
 ): ResourceCost {
-  const goalCosts = getTotalCosts(goalHq, goalBuild, config);
+  const goalCosts = getTotalCosts(catalogue, goalHq, goalBuild, config);
   const reusable = getBuildOverlap(currentBuild, goalBuild);
-  const reusableCosts = getTotalCosts(Math.min(currentHq, goalHq), reusable, config);
+  const reusableCosts = getTotalCosts(catalogue, Math.min(currentHq, goalHq), reusable, config);
 
   return {
     wood: goalCosts.wood - reusableCosts.wood,
@@ -41,13 +43,14 @@ export function getRemainingCosts(
  * upgraded this building first?") on top of the remaining cost.
  */
 export function getTicksToGoal(
+  catalogue: BuildingCatalogue | undefined,
   comparison: BuildComparison,
   config: GameConfig | undefined,
   currentResources: ResourceCost,
   extraCost?: ResourceCost,
 ): ResourceCost {
-  const remaining = getRemainingCosts(comparison, config);
-  const output = getTotalOutput(comparison.currentBuild, config);
+  const remaining = getRemainingCosts(catalogue, comparison, config);
+  const output = getTotalOutput(catalogue, comparison.currentBuild, config);
 
   const ticks: ResourceCost = { wood: 0, iron: 0, worker: 0 };
 

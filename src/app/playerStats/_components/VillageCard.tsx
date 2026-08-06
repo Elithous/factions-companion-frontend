@@ -1,18 +1,24 @@
+import BuildingIcon from '@/components/features/game/BuildingIcon';
 import { Card } from '@/components/ui/card';
+import type { BuildingCategoryMap } from '@/lib/game/buildingAssets';
 import type { VillageStats } from '@/types/player';
 
 interface VillageCardProps {
   villageStats: VillageStats;
+  categories?: BuildingCategoryMap;
 }
 
-export default function VillageCard({ villageStats }: VillageCardProps) {
+export default function VillageCard({ villageStats, categories }: VillageCardProps) {
   return (
     <Card className="building-group-card village-card p-4">
       <div className="flex items-start gap-4">
-        {/* Village Image - placeholder for now */}
-        <div className="building-image-placeholder">
-          <p className="text-center text-xs text-muted-foreground">Image</p>
-        </div>
+        {/* The HQ's artwork changes with its level, so it's passed through. */}
+        <BuildingIcon
+          buildingName="HQ"
+          categories={categories}
+          level={villageStats.level}
+          size={72}
+        />
 
         {/* Village Info */}
         <div className="flex flex-1 flex-col gap-1">

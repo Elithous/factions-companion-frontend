@@ -1,6 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Building,
+  BuildingCatalogue,
   GameConfig,
   MultiplierValues,
   StorageTypes,
@@ -13,6 +14,8 @@ interface OutputTableProps {
   title: string;
   buildings: Building[];
   config: GameConfig | undefined;
+  /** The selected game's catalogue; effects are read from it. */
+  catalogue: BuildingCatalogue | undefined;
 }
 
 const capitalize = (value: string) => `${value[0].toUpperCase()}${value.substring(1)}`;
@@ -21,12 +24,12 @@ const capitalize = (value: string) => `${value[0].toUpperCase()}${value.substrin
  * Per-tick production and storage for one build, plus the effective attack and
  * defense strength once world bonuses are applied.
  */
-export default function OutputTable({ title, buildings, config }: OutputTableProps) {
+export default function OutputTable({ title, buildings, config, catalogue }: OutputTableProps) {
   if (!config) return null;
 
-  const output = getTotalOutput(buildings, config);
-  const storage = getTotalStorage(buildings, config);
-  const combat = getEffectiveCombatStrength(buildings, config);
+  const output = getTotalOutput(catalogue, buildings, config);
+  const storage = getTotalStorage(catalogue, buildings, config);
+  const combat = getEffectiveCombatStrength(catalogue, buildings, config);
 
   return (
     <div className='outputs'>

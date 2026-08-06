@@ -1,0 +1,73 @@
+@use "sass:color";
+@use '../../../app/globals.scss' as global;
+
+// Dropdown rows are two lines, so the list needs more height than the default.
+.game-select-popover {
+  [cmdk-list] {
+    max-height: 22rem;
+  }
+}
+
+.game-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.game-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.game-option-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.game-option-details {
+  font-size: 0.78rem;
+  opacity: 0.72;
+  line-height: 1.3;
+  // Long map names shouldn't push the status badge off the row.
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-status {
+  flex-shrink: 0;
+  padding: 1px var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background-color: var(--orange-900);
+  color: var(--orange-200);
+
+  // Live games are the ones worth spotting in a long list.
+  &.IN_PROGRESS,
+  &.PLAYING {
+    background-color: color.adjust(global.$faction-green, $lightness: 6%);
+    color: var(--orange-100);
+  }
+
+  &.LOBBY {
+    background-color: color.adjust(global.$faction-yellow, $lightness: 4%);
+    color: var(--orange-100);
+  }
+}
+
+.game-winner {
+  font-weight: 600;
+
+  &.RED { color: color.adjust(global.$faction-red, $lightness: 32%); }
+  &.BLUE { color: color.adjust(global.$faction-blue, $lightness: 32%); }
+  &.GREEN { color: color.adjust(global.$faction-green, $lightness: 32%); }
+  &.YELLOW { color: color.adjust(global.$faction-yellow, $lightness: 32%); }
+}

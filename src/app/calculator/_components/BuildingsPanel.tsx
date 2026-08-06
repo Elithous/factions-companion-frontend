@@ -9,12 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { NumberInput } from '@/components/ui/number-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Building } from '@/lib/game';
+import type { Building, BuildingCatalogue } from '@/lib/game';
 
 import BuildingRow from './BuildingRow';
 
 export interface BuildingsPanelProps {
   buildings: Building[];
+  /** The selected game's catalogue, forwarded to each row's picker. */
+  catalogue: BuildingCatalogue | undefined;
   setBuildings: (buildings: Building[]) => void;
   hq: number;
   setHq: (hq: number) => void;
@@ -28,7 +30,13 @@ const nextId = (buildings: Building[]) =>
   buildings.length > 0 ? buildings[buildings.length - 1].id + 1 : 1;
 
 /** Editable, drag-sortable list of building stacks for one side of a build. */
-export default function BuildingsPanel({ buildings, setBuildings, hq, setHq }: BuildingsPanelProps) {
+export default function BuildingsPanel({
+  buildings,
+  catalogue,
+  setBuildings,
+  hq,
+  setHq,
+}: BuildingsPanelProps) {
   const totalBuildings = buildings.reduce((total, building) => total + building.count, 0);
   const addDisabled = totalBuildings >= hq;
 
@@ -102,6 +110,7 @@ export default function BuildingsPanel({ buildings, setBuildings, hq, setHq }: B
                   key={building.id}
                   id={building.id.toString()}
                   data={building}
+                  catalogue={catalogue}
                   updateData={handleUpdateRow}
                   disableCount={addDisabled}
                   onSplit={handleSplitBuilding}

@@ -17,7 +17,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 export interface ComboboxOption {
   value: string;
+  /** Shown on the closed trigger, and the default row content. */
   label: string;
+  /**
+   * Everything the search box should match against. Defaults to `label`, so
+   * options with richer rows can stay findable by fields they don't spell out.
+   */
+  searchText?: string;
+  /** Replaces `label` inside the dropdown row only. */
+  content?: React.ReactNode;
 }
 
 interface ComboboxProps {
@@ -30,6 +38,14 @@ interface ComboboxProps {
   disabled?: boolean;
   loading?: boolean;
   clearable?: boolean;
+  /**
+   * Label for `value` when it isn't in `options` yet.
+   *
+   * Options are often fetched, so a value restored from a URL can be set well
+   * before its option exists. Without this the trigger falls back to the
+   * placeholder and the control looks empty when it isn't.
+   */
+  valueLabel?: string;
   className?: string;
   triggerClassName?: string;
   id?: string;
@@ -49,12 +65,15 @@ export function Combobox({
   disabled,
   loading,
   clearable = true,
+  valueLabel,
   className,
   triggerClassName,
   id,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const selected = options.find((o) => o.value === value);
+  // A value with no matching option still counts as a selection.
+  const selectedLabel = selected?.label ?? (value ? valueLabel : undefined);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -67,13 +86,16 @@ export function Combobox({
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal bg-background",
-            !selected && "text-muted-foreground",
+            !selectedLabel && "text-muted-foreground",
             triggerClassName
           )}
         >
-          <span className="truncate">{selected ? selected.label : placeholder}</span>
+          <span className="truncate">{selectedLabel ?? placeholder}</span>
           {loading ? (
-            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
+            // Full opacity on purpose: a loading combobox is usually disabled
+            // too, and the button's own disabled:opacity-50 would otherwise
+            // compound with a dimmed spinner into something barely visible.
+            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" aria-label="Loading" />
           ) : (
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           )}
@@ -100,7 +122,10 @@ export function Combobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.label}
+                  // cmdk filters on this, so it carries the searchable text
+                  // rather than the display label. Selection is resolved from
+                  // the closure, not from what's passed back here.
+                  value={option.searchText ?? option.label}
                   onSelect={() => {
                     onChange(option.value === value ? (clearable ? null : value) : option.value);
                     setOpen(false);
@@ -108,11 +133,11 @@ export function Combobox({
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "mr-2 h-4 w-4 shrink-0",
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option.label}
+                  <div className="min-w-0 flex-1">{option.content ?? option.label}</div>
                 </CommandItem>
               ))}
             </CommandGroup>

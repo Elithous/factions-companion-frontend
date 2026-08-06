@@ -2,47 +2,91 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { weightToColor } from "@/lib/colors";
+import { heatmapColor, type MapSettings } from "@/lib/heatmap";
 import type { MapModel, Position } from "@/types/map";
 
-export interface MapSettings {
-  showHeatmap: boolean;
-  showGrid: boolean;
-}
+export type { MapSettings };
 
 interface CanvasSize {
   width: number;
   height: number;
 }
 
-const HEATMAP_GRADIENT = [
-  { weight: 0, color: '#FFFFFF' },      // White
-  { weight: 0.0001, color: '#00FF00' }, // Green
-  { weight: 0.01, color: '#0000FF' },   // Blue
-  { weight: 1, color: '#FF0000' },      // Red
-];
-
 /** Two clicks on the same tile within this window count as a double click. */
 const DOUBLE_CLICK_MS = 500;
 
-/** Keeps the canvas square and matched to its container. */
+/**
+ * Keeps the canvas square and matched to its container.
+ *
+ * Observes the container rather than listening for window resizes: the map box
+ * changes size for reasons the window never hears about — the panel below it
+ * expanding, a font landing, the flex row rewrapping — and measuring only once
+ * at mount can catch it before layout has settled, leaving a zero-sized canvas
+ * until something else happens to force a remeasure.
+ */
 function useCanvasSize(mapDivRef: React.RefObject<HTMLDivElement | null>) {
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
 
   useEffect(() => {
+    const element = mapDivRef.current;
+    if (!element) return;
+
     const setCanvasDims = () => {
-      const width = mapDivRef.current?.clientWidth || 0;
-      const height = mapDivRef.current?.clientHeight || 0;
-      const side = Math.min(width, height);
-      setSize({ width: side, height: side });
+      const side = Math.min(element.clientWidth || 0, element.clientHeight || 0);
+      // Skip no-op updates; the observer fires more often than the size changes.
+      setSize(prev => (prev.width === side && prev.height === side ? prev : { width: side, height: side }));
     };
 
     setCanvasDims();
-    window.addEventListener('resize', setCanvasDims);
-    return () => window.removeEventListener('resize', setCanvasDims);
+
+    const observer = new ResizeObserver(setCanvasDims);
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [mapDivRef]);
 
   return size;
+}
+
+/**
+ * Tracks whether the background image has actually decoded.
+ *
+ * The painter runs in an effect that has no idea the `<img>` is still in flight,
+ * and `drawImage` with an incomplete image silently draws nothing. Without this
+ * the map comes up blank and stays that way until some unrelated change — a
+ * filter, a hover, a resize — happens to trigger a repaint, which is why it
+ * looked like it needed a refresh.
+ */
+function useImageReady(
+  imageRef: React.RefObject<HTMLImageElement | null>,
+  image: MapModel['image'],
+) {
+  const [readySrc, setReadySrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const element = imageRef.current;
+    if (!image || !element) {
+      setReadySrc(null);
+      return;
+    }
+
+    const markReady = () => setReadySrc(element.currentSrc || element.src);
+
+    // A cached image is already complete before this effect runs and will never
+    // fire another load event, so check up front. On a game switch `complete`
+    // can still describe the *previous* image, so the listener stays attached
+    // either way rather than early-returning on a stale true — worst case the
+    // old map paints for one frame before the new one lands.
+    if (element.complete && element.naturalWidth > 0) {
+      markReady();
+    } else {
+      setReadySrc(null);
+    }
+
+    element.addEventListener('load', markReady);
+    return () => element.removeEventListener('load', markReady);
+  }, [imageRef, image]);
+
+  return readySrc;
 }
 
 /** Tracks which tile the pointer is over, in map coordinates. */
@@ -100,6 +144,8 @@ function useCanvasPainter(
   mapScale: number,
   hovered: Position | null,
   selected?: Position,
+  /** Changes once the background image is decoded, forcing a repaint. */
+  readySrc?: string | null,
 ) {
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d');
@@ -110,10 +156,14 @@ function useCanvasPainter(
     const tileWidth = size.width / map.dimensions.width;
     const tileHeight = size.height / map.dimensions.height;
 
-    if (map.image && imageRef.current) {
+    const image = imageRef.current;
+    if (image && readySrc && image.naturalWidth > 0) {
+      // Source rect comes from the decoded bitmap, not the imported asset's
+      // intrinsic size — Next may serve a rescaled file, and a mismatched source
+      // rect would crop or letterbox the map.
       ctx.drawImage(
-        imageRef.current,
-        0, 0, map.image.width, map.image.height,
+        image,
+        0, 0, image.naturalWidth, image.naturalHeight,
         0, 0, size.width, size.height,
       );
     }
@@ -125,7 +175,12 @@ function useCanvasPainter(
           const weight = map.tiles[x]?.[y]?.weight;
           if (!weight) continue;
 
-          ctx.fillStyle = weightToColor(weight, HEATMAP_GRADIENT);
+          // Null means the tile fell below the low cutoff — leave it unpainted
+          // so the map shows through.
+          const color = heatmapColor(weight, settings.gradient);
+          if (!color) continue;
+
+          ctx.fillStyle = color;
           ctx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
         }
       }
@@ -163,7 +218,7 @@ function useCanvasPainter(
       ctx.setLineDash([]);
       ctx.strokeRect(selected.x * tileWidth, selected.y * tileHeight, tileWidth, tileHeight);
     }
-  }, [canvasRef, imageRef, map, settings, size, mapScale, hovered, selected]);
+  }, [canvasRef, imageRef, map, settings, size, mapScale, hovered, selected, readySrc]);
 }
 
 /**
@@ -183,11 +238,14 @@ export function useMapCanvas(
 
   const canvasSize = useCanvasSize(mapDivRef);
   const hovered = useHoveredTile(canvasRef, map.dimensions);
+  const readySrc = useImageReady(mapImageRef, map.image);
 
   const awaitingSecondClick = useRef(false);
   const lastClickPos = useRef<Position>({ x: -1, y: -1 });
 
-  useCanvasPainter(canvasRef, mapImageRef, map, settings, canvasSize, mapScale, hovered, selected);
+  useCanvasPainter(
+    canvasRef, mapImageRef, map, settings, canvasSize, mapScale, hovered, selected, readySrc,
+  );
 
   const handleTileClick = useCallback(() => {
     if (!hovered || !onTileClick) return;

@@ -1,4 +1,9 @@
-import type { BuildingNameType } from './buildings.data';
+/**
+ * Building names are plain strings now: the catalogue is fetched per game, so
+ * there's no compile-time list to narrow against. Validate against the fetched
+ * catalogue instead.
+ */
+export type BuildingNameType = string;
 
 /**
  * Core value/type definitions for the game domain.
@@ -63,5 +68,3 @@ export interface Building {
   sortOrder?: number;
 }
 
-/** Re-exported so consumers only need one import for the building types. */
-export type { BuildingNameType };

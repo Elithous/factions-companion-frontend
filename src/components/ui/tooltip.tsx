@@ -18,7 +18,11 @@ const TooltipContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 overflow-hidden rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+        // Floating layers portal to <body>, so they compete with fixed page
+        // chrome in the root stacking context. The build timeline sits at
+        // z-index 100, which the shadcn default of z-50 loses to. Tooltips rank
+        // highest of the three since they can be shown over a dialog.
+        "z-[200] overflow-hidden rounded-md border border-border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         className
       )}
       {...props}
@@ -27,7 +31,19 @@ const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
-/** Convenience wrapper matching Mantine's <Tooltip label="..."> single-child API. */
+/**
+ * Convenience wrapper matching Mantine's <Tooltip label="..."> single-child API.
+ *
+ * Rest props go to the tooltip *content* (`side`, `align`, ...), and this is a
+ * plain function component, not a forwardRef. So it must always be the outer
+ * wrapper — never the child of an `asChild` parent like `PopoverTrigger` or
+ * `DialogTrigger`. Nested the wrong way round, the parent's injected props and
+ * ref land on the tooltip content instead of the real trigger, and the control
+ * silently stops responding to clicks:
+ *
+ *     <SimpleTooltip label="..."><PopoverTrigger asChild><button /></PopoverTrigger></SimpleTooltip>  // right
+ *     <PopoverTrigger asChild><SimpleTooltip label="..."><button /></SimpleTooltip></PopoverTrigger>  // wrong
+ */
 function SimpleTooltip({
   label,
   children,
